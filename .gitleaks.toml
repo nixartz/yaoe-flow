@@ -1,0 +1,11 @@
+# gitleaks configuration — extends the default ruleset.
+[extend]
+useDefault = true
+
+# Test fixtures: fake credentials used by the contract/unit suites
+# (e.g. the obviously-fake "-----BEGIN RSA PRIVATE KEY-----\nabc\n..." PEM in
+# linear-connections.test.ts). Real secrets never live in the tree — see
+# SECURITY.md and knowledge/rules/secrets-and-best-effort-writes.md.
+[allowlist]
+description = "Fake fixtures in test suites"
+paths = ['''app/test/.*\.test\.ts''']
