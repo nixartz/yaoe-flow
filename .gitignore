@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Build output — binaries go to GitHub Releases, never into git
+dist/
+build/
+
+# Local runtime state (daemon home lives in ~/.yaoe-flow, but keep repo-local
+# fallbacks ignored too)
+.data/
+data/
+run-*-home/
+worktrees/
+
+# Environment / secrets — only .env.example is committed
+.env
+.env.*
+!.env.example
+.myenv
+*.bak
+
+# Logs
+*.log
+/logs
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Personal scratch notes
+.notes.md

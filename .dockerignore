@@ -1,0 +1,11 @@
+# Contexto de build do Dockerfile.goose (raiz). Mantenha o contexto enxuto.
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+**/.git
+**/*.log
+.docs
+project-map
+worker-image
+**/.DS_Store

@@ -1,0 +1,8 @@
+# Contexto de build do Dockerfile (raiz). Mantenha o contexto enxuto.
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+**/.git
+**/*.log
+**/.DS_Store

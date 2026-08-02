@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      # Contract suite: ACP client + normalization + liveness against the
+      # mock-acp-agent — no LLM cost, no real CLI, no network flakiness. Along
+      # with the other unit tests (secrets/config/migrations/users/agents/
+      # budgets) it runs in seconds.
+      - run: bun test
+      # Dashboard: separate typecheck (full build happens in release; here we
+      # only guarantee the screens compile).
+      - name: dashboard typecheck
+        working-directory: dashboard
+        run: |
+          bun install --frozen-lockfile
+          bunx tsc -b --pretty false
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

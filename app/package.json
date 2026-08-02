@@ -1,0 +1,44 @@
+{
+  "name": "yaoe-flow",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "start:debug": "bun --inspect-wait=localhost:6499/debug src/index.ts",
+    "start:debug:watch": "bun --inspect-wait=localhost:6499/debug --watch src/index.ts",
+    "start:debug:watch:log": "bun --inspect-wait=localhost:6499/debug --watch src/index.ts | bun run log",
+    "log": "pino-pretty --singleLine --colorize",
+    "log:detailed": "pino-pretty --singleLine --colorize --translateTime='yyyy-mm-dd HH:MM:ss' --ignore='pid,hostname'",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:smoke": "bun scripts/smoke-harness.ts",
+    "seed:demo": "bun scripts/seed-demo.ts",
+    "embed-assets": "bun scripts/generate-embedded-assets.ts",
+    "build:install": "bun ../scripts/build-and-install.ts"
+  },
+  "dependencies": {
+    "@hono/standard-validator": "^0.3.0",
+    "@scalar/hono-api-reference": "^0.11.11",
+    "@standard-community/standard-json": "^0.3.5",
+    "@standard-community/standard-openapi": "^0.2.9",
+    "@zed-industries/agent-client-protocol": "^0.4.5",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.6.0",
+    "hono-openapi": "^1.3.1",
+    "ioredis": "^5.4.0",
+    "openapi-types": "^12.1.3",
+    "pino": "^10.3.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/json-schema": "^7.0.15",
+    "drizzle-kit": "^0.31.10",
+    "puppeteer-core": "^25.3.0",
+    "typescript": "^5.6.0"
+  },
+  "description": "YAOE-FLOW (Yet Another Orchestration Engine-Flow) \u2014 autonomous development pipeline: Linear issues in, reviewed & merged PRs out.",
+  "author": "SIMSDEV (https://sims.dev.br)",
+  "license": "MIT"
+}

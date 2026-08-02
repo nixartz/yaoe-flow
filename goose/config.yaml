@@ -1,0 +1,93 @@
+# Config GLOBAL mínima do goose para a imagem (orchestrator + goose).
+# Copiada para /root/.config/goose/config.yaml no Dockerfile.goose.
+#
+# Objetivo: set de ferramentas ENXUTO e DETERMINÍSTICO. O goose, por padrão,
+# habilita ~16 extensions bundled (analyze, todo, tom, memory, …) → centenas de
+# tools, o que PIORA a seleção do modelo e favorece vazamento de contexto/escopo.
+# Aqui deixamos só o `developer` (shell/fs/git). Os MCPs do papel (linear/github)
+# vêm do RECIPE, não daqui — então cada agent fica com: developer + os MCPs do recipe.
+#
+# Obs.: é preciso listar cada extension com `enabled: false` (não basta omitir —
+# o goose re-injeta os defaults que faltarem). Provider/model vêm por env
+# (GOOSE_PROVIDER/GOOSE_MODEL + OPENROUTER_API_KEY), definidos no Dockerfile/.env.
+extensions:
+  developer:
+    enabled: true
+    type: platform
+    name: developer
+    bundled: true
+  todo:
+    enabled: false
+    type: platform
+    name: todo
+    bundled: true
+  tom:
+    enabled: false
+    type: platform
+    name: tom
+    bundled: true
+  analyze:
+    enabled: false
+    type: platform
+    name: analyze
+    bundled: true
+  apps:
+    enabled: false
+    type: platform
+    name: apps
+    bundled: true
+  skills:
+    enabled: false
+    type: platform
+    name: skills
+    bundled: true
+  yaoe-flow:
+    enabled: false
+    type: platform
+    name: orchestrator
+    bundled: true
+  extensionmanager:
+    enabled: false
+    type: platform
+    name: Extension Manager
+    bundled: true
+  code_execution:
+    enabled: false
+    type: platform
+    name: code_execution
+    bundled: true
+  chatrecall:
+    enabled: false
+    type: platform
+    name: chatrecall
+    bundled: true
+  summarize:
+    enabled: false
+    type: platform
+    name: summarize
+    bundled: true
+  summon:
+    enabled: false
+    type: platform
+    name: summon
+    bundled: true
+  computercontroller:
+    enabled: false
+    type: builtin
+    name: computercontroller
+    bundled: true
+  memory:
+    enabled: false
+    type: builtin
+    name: memory
+    bundled: true
+  autovisualiser:
+    enabled: false
+    type: builtin
+    name: autovisualiser
+    bundled: true
+  tutorial:
+    enabled: false
+    type: builtin
+    name: tutorial
+    bundled: true

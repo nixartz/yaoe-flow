@@ -1,0 +1,178 @@
+name: release
+
+# Standalone binary release. Tag `vX.Y.Z` → cross-compile every platform,
+# verify each binary EXECUTES on its real platform, then publish a GitHub
+# Release whose body comes from the matching CHANGELOG.md section
+# (https://keepachangelog.com) plus auto-generated notes.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the release
+
+jobs:
+  # ── Build: cross-compile the whole matrix on a single ubuntu runner (Bun
+  # cross-compiles from one host via --target) + checksums + local smoke test. ──
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version from tag
+        id: version
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build dashboard SPA
+        working-directory: dashboard
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Install app deps
+        working-directory: app
+        run: bun install --frozen-lockfile
+
+      - name: Embed migrations/SOULs/SPA into the bundle
+        working-directory: app
+        run: bun run embed-assets
+
+      - name: Compile binaries (cross-compile)
+        working-directory: app
+        env:
+          # Via env (not ${{ }} inlined in the script) — avoids interpolating a
+          # raw tag/SHA value into the shell (script-injection hygiene).
+          YFLOW_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          mkdir -p ../dist
+          commit_short="${GITHUB_SHA:0:7}"
+          # "name:target" instead of an associative array — no bash 4+ needed.
+          for pair in \
+            linux-x64:bun-linux-x64 \
+            linux-arm64:bun-linux-arm64 \
+            darwin-x64:bun-darwin-x64 \
+            darwin-arm64:bun-darwin-arm64 \
+            windows-x64:bun-windows-x64; do
+            name="${pair%%:*}"
+            target="${pair##*:}"
+            ext=""
+            [ "$name" = "windows-x64" ] && ext=".exe"
+            bun build --compile --minify \
+              --define YAOE_VERSION="\"$YFLOW_VERSION\"" \
+              --define YAOE_COMMIT="\"$commit_short\"" \
+              --target="$target" \
+              src/index.ts \
+              --outfile "../dist/yaoe-flow-$name$ext"
+          done
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum yaoe-flow-* > SHA256SUMS
+
+      - name: Smoke test (host-native binary)
+        working-directory: dist
+        env:
+          YFLOW_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          chmod +x yaoe-flow-linux-x64
+          out=$(./yaoe-flow-linux-x64 version)
+          echo "$out"
+          echo "$out" | grep -q "yaoe-flow $YFLOW_VERSION " || {
+            echo "::error::reported version does not match the tag"; exit 1;
+          }
+          YAOE_HOME="$RUNNER_TEMP/yaoe-smoke" ./yaoe-flow-linux-x64 doctor --offline || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yaoe-flow-binaries
+          path: |
+            dist/yaoe-flow-*
+            dist/SHA256SUMS
+          retention-days: 7
+
+  # ── Verify: each binary EXECUTES on its REAL platform, not just compiles —
+  # downloads this run's artifact and runs `version`/`doctor --offline`. ──
+  verify:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: yaoe-flow-linux-x64
+          - os: ubuntu-24.04-arm
+            asset: yaoe-flow-linux-arm64
+          - os: macos-latest
+            asset: yaoe-flow-darwin-arm64
+          - os: macos-13
+            asset: yaoe-flow-darwin-x64
+          - os: windows-latest
+            asset: yaoe-flow-windows-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: yaoe-flow-binaries
+          path: dist
+
+      - name: version + doctor --offline (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x "dist/${{ matrix.asset }}"
+          "./dist/${{ matrix.asset }}" version
+          YAOE_HOME="$RUNNER_TEMP/yaoe-smoke" "./dist/${{ matrix.asset }}" doctor --offline || true
+
+      - name: version + doctor --offline (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & ".\dist\${{ matrix.asset }}" version
+          $env:YAOE_HOME = Join-Path $env:RUNNER_TEMP "yaoe-smoke"
+          # doctor --offline exits 1 without config.env (same as the Unix
+          # `|| true`) — the smoke only confirms the binary RUNS, not that the
+          # release environment has keys/Valkey.
+          & ".\dist\${{ matrix.asset }}" doctor --offline
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) { exit $LASTEXITCODE }
+          exit 0
+
+  # ── Release: only publishes after EVERY platform confirmed the binary
+  # actually runs (verify), not just that it compiled (build). ──
+  release:
+    needs: [build, verify]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: yaoe-flow-binaries
+          path: dist
+
+      - name: Extract CHANGELOG section for this version
+        env:
+          YFLOW_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          # Grabs the "## [X.Y.Z]" section from CHANGELOG.md (keepachangelog
+          # format) to use as the release body. Falls back to an empty body
+          # (auto-generated notes still apply below).
+          awk -v ver="$YFLOW_VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { grab=1; next }
+            grab && /^## \[/ { grab=0 }
+            grab { print }
+          ' CHANGELOG.md > release-body.md || true
+          echo "--- release body ---"
+          cat release-body.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-body.md
+          files: |
+            dist/yaoe-flow-*
+            dist/SHA256SUMS
+          generate_release_notes: true
