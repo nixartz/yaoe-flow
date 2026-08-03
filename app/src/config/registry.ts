@@ -85,7 +85,7 @@ const bootstrapGroup: SettingMeta[] = [
     default: "localhost",
     scope: "bootstrap",
     description:
-      'Bind hostname for the API (PORT) and the dashboard (DASHBOARD_PORT). Default "localhost" — in Docker/K8s use "0.0.0.0", otherwise -p/Service cannot reach the process (loopback binds are not visible outside the container).',
+      'Bind hostname for the API (PORT) and the dashboard (DASHBOARD_PORT). Default "localhost" — in Docker/K8s use "0.0.0.0", otherwise -p/Service cannot reach the process (loopback binds are not visible outside the container). The setup wizard asks this (Network binding step); see docs/networking.md for reverse proxy / custom domain setups.',
   },
   {
     key: "PORT",

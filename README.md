@@ -120,6 +120,7 @@ Everything on disk lives in **`~/.yaoe-flow/`** (`config.env`, `data/`, `logs/`,
 |---|---|
 | [docs/linear-setup.md](docs/linear-setup.md) | Workspace, statuses, labels, webhook — what each agent pulls from each step |
 | [docs/github-setup.md](docs/github-setup.md) | PAT (fine-grained/classic) or GitHub App, exact permissions |
+| [docs/networking.md](docs/networking.md) | Bind address (`localhost` vs `0.0.0.0`), reverse proxy, custom domain |
 | [docs/agents.md](docs/agents.md) | What each agent role does and the issue structure it produces |
 | [docs/mcp-configuration.md](docs/mcp-configuration.md) | Wiring MCPs (Linear, GitHub, Hindsight, custom) per agent |
 | [docs/harnesses.md](docs/harnesses.md) | ACP CLIs (Claude Code/Cursor/Codex), Goose+OpenRouter, Hermes HTTP |

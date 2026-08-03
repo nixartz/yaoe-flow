@@ -19,6 +19,7 @@ import {
   stepHarnessDeps,
   stepInstallLocal,
   stepLinear,
+  stepNetwork,
   stepService,
   stepSummary,
   stepSystemDeps,
@@ -78,6 +79,7 @@ async function runFullWizard(nonInteractive: boolean, flags: Record<string, stri
 
   await run(stepSystemDeps, "System dependencies");
   await run(stepDirsKeys, "Directories and keys");
+  await run(() => stepNetwork(nonInteractive), "Network binding");
   await run(() => stepValkey(nonInteractive), "Valkey");
   await run(() => stepLinear(nonInteractive, process.env.SETUP_WEBHOOK_URL), "Linear");
   await run(() => stepGithub(nonInteractive), "GitHub");
@@ -108,10 +110,14 @@ async function showCurrentConfig(): Promise<void> {
     }
   };
 
+  // bootstrap.host is frozen at process start — re-read config.env in case a
+  // menu action (e.g. "Network binding") just changed it in THIS run.
+  const effectiveHost = readConfigEnv().get("HOST") || bootstrap.host;
   console.log("\nService");
   console.log(`  ${"YAOE_HOME".padEnd(28)} ${bootstrap.yaoeHome}`);
-  console.log(`  ${"API".padEnd(28)} http://${bootstrap.host}:${bootstrap.port}`);
-  console.log(`  ${"Dashboard".padEnd(28)} http://${bootstrap.host}:${bootstrap.dashboardPort}`);
+  console.log(`  ${"HOST".padEnd(28)} ${effectiveHost}`);
+  console.log(`  ${"API".padEnd(28)} http://${effectiveHost}:${bootstrap.port}`);
+  console.log(`  ${"Dashboard".padEnd(28)} http://${effectiveHost}:${bootstrap.dashboardPort}`);
   show("VALKEY_URL");
   show("ORCHESTRATOR_ENABLED");
   console.log("\nLinear");
@@ -140,6 +146,7 @@ async function runMenu(flags: Record<string, string | boolean>): Promise<void> {
   for (;;) {
     const choice = await choose("Configuration menu:", [
       { label: "View current configuration", value: "view" },
+      { label: "Network binding (localhost vs 0.0.0.0)", value: "network" },
       { label: "Linear (API key, team, labels, webhook)", value: "linear" },
       { label: "GitHub (token, authorized orgs)", value: "github" },
       { label: "Valkey (locks database)", value: "valkey" },
@@ -155,6 +162,9 @@ async function runMenu(flags: Record<string, string | boolean>): Promise<void> {
     switch (choice.value) {
       case "view":
         await showCurrentConfig();
+        break;
+      case "network":
+        await stepNetwork(false);
         break;
       case "linear":
         await stepLinear(false, process.env.SETUP_WEBHOOK_URL);

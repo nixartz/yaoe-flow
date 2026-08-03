@@ -6,6 +6,15 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-03
+
+Patch release: makes the bind address a first-class setup question, and documents the (already-working) path to a custom domain. OKF bundle: [knowledge/changes/2026-08-03/network-binding-and-reverse-proxy-docs](knowledge/changes/2026-08-03/network-binding-and-reverse-proxy-docs/README.md).
+
+### Added
+
+- **`yaoe-flow setup` Network binding step** (new step 2/11): asks whether yaoe-flow should be reachable only from this machine (`HOST=localhost`, default) or from other machines/containers (`HOST=0.0.0.0`), with a "custom bind address" escape hatch. Available on first run and later from the configuration menu ("Network binding").
+- **[docs/networking.md](docs/networking.md)**: explains the `HOST` bind choice, and how to put yaoe-flow behind a reverse proxy on a custom domain — no rebuild or extra config needed, since the dashboard SPA always calls its API with relative paths (same origin as whatever domain served the page). Includes sample Caddy/nginx configs and a note on the session cookie's `Secure` flag under HTTPS.
+
 ## [0.1.1] - 2026-08-03
 
 Patch release: fixes a crash on x64 CPUs older than 2013. OKF bundle: [knowledge/changes/2026-08-03/avx2-baseline-builds](knowledge/changes/2026-08-03/avx2-baseline-builds/README.md).

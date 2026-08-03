@@ -1,7 +1,7 @@
 // Steps of the `yaoe-flow setup` wizard — each function is one step, in
 // order, idempotent (running again reviews existing values, never destroys).
 //
-// Convention: every step announces itself with a [n/10] header, whether it is
+// Convention: every step announces itself with a [n/11] header, whether it is
 // REQUIRED or OPTIONAL, and — when a credential is involved — WHERE to create
 // it and WHICH permissions it really needs.
 import { randomBytes } from "node:crypto";
@@ -56,7 +56,7 @@ function installHint(pkg: string): string {
 
 // ── Step 0 — System dependencies (REQUIRED) ──
 export async function stepSystemDeps(): Promise<StepResult> {
-  console.log("\n[0/10] System dependencies — REQUIRED");
+  console.log("\n[0/11] System dependencies — REQUIRED");
   const git = await which("git");
   if (!git) {
     console.error("❌ git not found — required (agents clone repositories).");
@@ -82,7 +82,7 @@ export async function stepSystemDeps(): Promise<StepResult> {
 
 // ── Step 1 — Directories and keys (REQUIRED, automatic) ──
 export async function stepDirsKeys(): Promise<StepResult> {
-  console.log("\n[1/10] Directories and keys — REQUIRED (automatic)");
+  console.log("\n[1/11] Directories and keys — REQUIRED (automatic)");
   ensureYaoeDirs();
 
   const current = readConfigEnv();
@@ -110,7 +110,52 @@ export async function stepDirsKeys(): Promise<StepResult> {
   return { step: "Directories and keys", status: "done" };
 }
 
-// ── Step 2 — Valkey (REQUIRED) ──
+// ── Step 2 — Network binding (REQUIRED, default is the safe choice) ──
+export async function stepNetwork(nonInteractive: boolean): Promise<StepResult> {
+  console.log("\n[2/11] Network binding — REQUIRED (default: this machine only)");
+  console.log("By default yaoe-flow only accepts connections from THIS machine (HOST=localhost).");
+  console.log("Bind to 0.0.0.0 only if you need to reach it directly from other machines/containers —");
+  console.log("if a reverse proxy (nginx/Caddy) on this SAME machine will front it, keep localhost:");
+  console.log("the proxy already reaches it over loopback, no bind change needed.\n");
+
+  const current = configuredSetting("HOST");
+  // HOST is a common, low-entropy env var name — some shells/containers set it
+  // for unrelated reasons, so "configured" here may be neither of the two
+  // canned choices. Route anything else to "custom" instead of mislabeling it.
+  const isLocal = !current || current === "localhost" || current === "127.0.0.1";
+  const currentValue = current === "0.0.0.0" ? "0.0.0.0" : isLocal ? "localhost" : "__custom__";
+
+  let host: string;
+  if (nonInteractive) {
+    host = (process.env.HOST ?? current ?? "localhost").trim() || "localhost";
+  } else {
+    const picked = await chooseOrKeep(
+      "Who should be able to reach yaoe-flow?",
+      [
+        { label: "Only this machine (localhost) — safer, recommended", value: "localhost" },
+        { label: "Other machines/containers on the network (0.0.0.0)", value: "0.0.0.0" },
+        { label: currentValue === "__custom__" ? `Custom bind address (currently: ${current})` : "Custom bind address", value: "__custom__" },
+      ],
+      currentValue,
+      "HOST"
+    );
+    host =
+      picked.value === "__custom__"
+        ? (await ask("Bind address:", current ?? "0.0.0.0")).trim() || "0.0.0.0"
+        : picked.value;
+  }
+
+  if (host !== "localhost" && host !== "127.0.0.1") {
+    console.log(`⚠️  binding to ${host} exposes the API (PORT) and dashboard (DASHBOARD_PORT) beyond this machine.`);
+    console.log("   Make sure a firewall (or your cloud provider's security group) limits who can reach those ports.");
+  }
+
+  writeConfigEnv({ HOST: host });
+  console.log(`✅ HOST=${host} (takes effect the next time "yaoe-flow daemon" starts)`);
+  return { step: "Network binding", status: "done" };
+}
+
+// ── Step 3 — Valkey (REQUIRED) ──
 async function pingValkey(url: string): Promise<boolean> {
   const redis = new Redis(url, { lazyConnect: true, connectTimeout: 2000, maxRetriesPerRequest: 1, retryStrategy: () => null });
   try {
@@ -123,7 +168,7 @@ async function pingValkey(url: string): Promise<boolean> {
 }
 
 export async function stepValkey(nonInteractive: boolean): Promise<StepResult> {
-  console.log("\n[2/10] Valkey — REQUIRED");
+  console.log("\n[3/11] Valkey — REQUIRED");
   console.log("Valkey (or Redis) stores the footprint locks and attempt counters that keep");
   console.log("concurrent agents from colliding. A local instance is perfectly fine.\n");
 
@@ -232,9 +277,9 @@ export async function stepValkey(nonInteractive: boolean): Promise<StepResult> {
   return { step: "Valkey", status: "pending", detail: "PING failed after install" };
 }
 
-// ── Step 3 — Linear (REQUIRED) ──
+// ── Step 4 — Linear (REQUIRED) ──
 export async function stepLinear(nonInteractive: boolean, webhookUrlHint?: string): Promise<StepResult> {
-  console.log("\n[3/10] Linear — REQUIRED");
+  console.log("\n[4/11] Linear — REQUIRED");
   console.log("Linear is the source of truth of the pipeline (statuses, labels, comments).");
   console.log("You need a personal API key:");
   console.log("  • Where: Linear → Settings → Security & access → Personal API keys");
@@ -451,9 +496,9 @@ export async function stepLinear(nonInteractive: boolean, webhookUrlHint?: strin
   return { step: "Linear", status: "done", detail: `${team.name} (${team.key})` };
 }
 
-// ── Step 4 — GitHub (REQUIRED) ──
+// ── Step 5 — GitHub (REQUIRED) ──
 export async function stepGithub(nonInteractive: boolean): Promise<StepResult> {
-  console.log("\n[4/10] GitHub — REQUIRED");
+  console.log("\n[5/11] GitHub — REQUIRED");
   console.log("The service reads PRs (scope-check) and the agents push branches/PRs.");
   console.log("You need a token. Two options:");
   console.log("  • Fine-grained PAT (recommended): https://github.com/settings/personal-access-tokens/new");
@@ -531,9 +576,9 @@ export async function stepGithub(nonInteractive: boolean): Promise<StepResult> {
   return { step: "GitHub", status: "done" };
 }
 
-// ── Step 5 — First admin (REQUIRED for the dashboard) ──
+// ── Step 6 — First admin (REQUIRED for the dashboard) ──
 export async function stepFirstAdmin(nonInteractive: boolean): Promise<StepResult> {
-  console.log("\n[5/10] First admin — REQUIRED (dashboard login)");
+  console.log("\n[6/11] First admin — REQUIRED (dashboard login)");
   const { countUsers, createFirstAdmin } = await import("../../db/users");
 
   if (countUsers() > 0) {
@@ -571,12 +616,12 @@ export async function stepFirstAdmin(nonInteractive: boolean): Promise<StepResul
   return { step: "First admin", status: "done", detail: username };
 }
 
-// ── Step 6 — Harness dependencies (OPTIONAL, but you need at least one harness) ──
+// ── Step 7 — Harness dependencies (OPTIONAL, but you need at least one harness) ──
 export async function stepHarnessDeps(
   nonInteractive: boolean,
   flags: Record<string, string | boolean>
 ): Promise<StepResult> {
-  console.log("\n[6/10] Harness dependencies — OPTIONAL (at least one harness is needed to run agents)");
+  console.log("\n[7/11] Harness dependencies — OPTIONAL (at least one harness is needed to run agents)");
   console.log(
     "Before detection, we offer to install what each harness needs:\n" +
       "  • Claude Code / Codex → ACP adapter (npm) on top of the official CLI\n" +
@@ -717,9 +762,9 @@ export async function stepHarnessDeps(
   };
 }
 
-// ── Step 7 — Harness detection (OPTIONAL) ──
+// ── Step 8 — Harness detection (OPTIONAL) ──
 export async function stepHarness(nonInteractive: boolean): Promise<StepResult> {
-  console.log("\n[7/10] Harness detection — OPTIONAL");
+  console.log("\n[8/11] Harness detection — OPTIONAL");
   const { ensureHarnessBinOnPath } = await import("./harnessDeps");
   ensureHarnessBinOnPath();
 
@@ -761,12 +806,12 @@ export async function stepHarness(nonInteractive: boolean): Promise<StepResult> 
   return { step: "Harness detection", status: "done" };
 }
 
-// ── Step 8 — Local binary (OPTIONAL: compile + ~/.local/bin) ──
+// ── Step 9 — Local binary (OPTIONAL: compile + ~/.local/bin) ──
 export async function stepInstallLocal(
   nonInteractive: boolean,
   flags: Record<string, string | boolean>
 ): Promise<StepResult> {
-  console.log("\n[8/10] Local binary — OPTIONAL");
+  console.log("\n[9/11] Local binary — OPTIONAL");
 
   const root = findServiceRoot();
   if (!root) {
@@ -826,9 +871,9 @@ export async function stepInstallLocal(
   return { step: "Local binary", status: "done", detail: installed ?? undefined };
 }
 
-// ── Step 9 — System service (OPTIONAL) ──
+// ── Step 10 — System service (OPTIONAL) ──
 export async function stepService(nonInteractive: boolean, flags: Record<string, string | boolean>): Promise<StepResult> {
-  console.log("\n[9/10] System service — OPTIONAL");
+  console.log("\n[10/11] System service — OPTIONAL");
 
   // Installing a service is a persistent system change (unit/plist/Task
   // Scheduler + auto start) — it only happens with an EXPLICIT flag
@@ -871,15 +916,18 @@ export async function stepService(nonInteractive: boolean, flags: Record<string,
   return { step: "System service", status: r.created ? "done" : "pending", detail: r.command };
 }
 
-// ── Step 10 — Summary ──
+// ── Step 11 — Summary ──
 export function stepSummary(results: StepResult[]): void {
-  console.log("\n[10/10] Summary\n");
+  console.log("\n[11/11] Summary\n");
   for (const r of results) {
     const icon = r.status === "done" ? "✅" : r.status === "pending" ? "⚠️ " : "⏭️ ";
     console.log(`${icon} ${r.step}${r.detail ? ` — ${r.detail}` : ""}`);
   }
   const pending = results.filter((r) => r.status === "pending");
-  console.log(`\nDashboard: http://${bootstrap.host}:${bootstrap.dashboardPort}`);
+  // bootstrap.host is frozen at process start — re-read config.env in case the
+  // Network binding step just changed it in THIS run (takes effect next boot).
+  const effectiveHost = readConfigEnv().get("HOST") || bootstrap.host;
+  console.log(`\nDashboard: http://${effectiveHost}:${bootstrap.dashboardPort}`);
   console.log('Next: put your first issue into the pipeline with the "ready-to-refine" label in Linear.');
   console.log(`YAOE_HOME: ${bootstrap.yaoeHome} (logs in ${bootstrap.yaoeLogsDir}, data in ${bootstrap.yaoeDataDir})`);
   if (pending.length > 0) {
