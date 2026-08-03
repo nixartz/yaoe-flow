@@ -16,6 +16,7 @@ jobs:
   # cross-compiles from one host via --target) + checksums + local smoke test. ──
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.version.outputs.value }}
     steps:
@@ -97,9 +98,14 @@ jobs:
           retention-days: 7
 
   # ── Verify: each binary EXECUTES on its REAL platform, not just compiles —
-  # downloads this run's artifact and runs `version`/`doctor --offline`. ──
+  # downloads this run's artifact and runs `version`/`doctor --offline`.
+  # darwin-x64 is intentionally NOT verified here: the macos-13 runner queue
+  # on GitHub-hosted Actions is unreliable (can sit queued for hours with no
+  # capacity) — the binary is still built and released, just not smoke-tested
+  # on real macOS 13. Revisit if GitHub adds a faster Intel-mac runner. ──
   verify:
     needs: build
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -110,8 +116,6 @@ jobs:
             asset: yaoe-flow-linux-arm64
           - os: macos-latest
             asset: yaoe-flow-darwin-arm64
-          - os: macos-13
-            asset: yaoe-flow-darwin-x64
           - os: windows-latest
             asset: yaoe-flow-windows-x64.exe
     runs-on: ${{ matrix.os }}
@@ -146,6 +150,7 @@ jobs:
   release:
     needs: [build, verify]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 

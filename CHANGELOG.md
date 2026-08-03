@@ -38,8 +38,11 @@ First public release, extracted from the `nixartz/ai-agents` monorepo
   uninstall instructions.
 - **Release pipeline**: tag `vX.Y.Z` → cross-compiled binaries for Linux,
   macOS and Windows (x64 + arm64 where Bun supports it), per-platform
-  execution verification, GitHub Release with this changelog's section as the
-  body.
+  execution verification (all targets except darwin-x64 — the `macos-13`
+  GitHub-hosted runner queue is unreliable; that binary is still built and
+  released, just not smoke-tested on real hardware), GitHub Release with this
+  changelog's section as the body. Every CI/release job has a 10-minute
+  timeout so a stuck runner queue fails fast instead of hanging indefinitely.
 - English documentation set: README, guides (Linear, GitHub, agents, MCPs,
   harnesses), CONTRIBUTING, SECURITY and the `knowledge/` structure
   (rules / product / OKF changes).
