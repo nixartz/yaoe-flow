@@ -183,7 +183,7 @@ export async function getReadinessSnapshot<T = unknown>(connectionId: string): P
   try {
     return JSON.parse(v) as T;
   } catch (e) {
-    log.valkey.warn({ connectionId, ...errFields(e) }, "readiness snapshot JSON inválido");
+    log.valkey.warn({ connectionId, ...errFields(e) }, "invalid readiness snapshot JSON");
     return null;
   }
 }

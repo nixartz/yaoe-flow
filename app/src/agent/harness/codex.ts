@@ -43,7 +43,7 @@ export function prepareCodexAttribution(input: AcpSpawnContext, env: Record<stri
   } catch (e) {
     log.agent.warn(
       { harness: "codex", runId: input.runId, codexHome, ...errFields(e) },
-      "não foi possível montar CODEX_HOME pra atribuição — seguindo com ~/.codex do host"
+      "could not build CODEX_HOME for attribution — continuing with the host's ~/.codex"
     );
     return { env };
   }

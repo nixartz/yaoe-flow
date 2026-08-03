@@ -14,7 +14,7 @@ usersRoutes.get(
   "/users",
   describeRoute({
     tags: ["Users"],
-    summary: "Lista usuários",
+    summary: "List users",
     responses: { 200: jsonContent(looseObject, "Usuários") },
   }),
   (c) => c.json({ users: usersRepo.listUsers() })
@@ -24,7 +24,7 @@ usersRoutes.post(
   "/users",
   describeRoute({
     tags: ["Users"],
-    summary: "Cria usuário",
+    summary: "Create user",
     responses: {
       200: jsonContent(okBody.extend({ user: looseObject }), "Criado"),
       400: jsonContent(errorBody, "Erro de validação"),
@@ -53,7 +53,7 @@ usersRoutes.patch(
   "/users/:id",
   describeRoute({
     tags: ["Users"],
-    summary: "Atualiza usuário",
+    summary: "Update user",
     responses: {
       200: jsonContent(okBody.extend({ user: looseObject }), "Atualizado"),
       400: jsonContent(errorBody, "Erro"),
@@ -84,7 +84,7 @@ usersRoutes.post(
   "/profile/password",
   describeRoute({
     tags: ["Users"],
-    summary: "Troca a própria senha (exige senha atual)",
+    summary: "Change your own password (requires the current password)",
     responses: {
       200: jsonContent(okBody, "Senha alterada"),
       400: jsonContent(errorBody, "Erro de validação"),

@@ -1,11 +1,12 @@
-# Imagem do SERVIÇO DE ORQUESTRAÇÃO (leve — só Bun) + a dashboard de observabilidade
-# (SPA buildada + servida numa porta secundária, ver DASHBOARD_PORT). NÃO inclui o
-# goose. Use esta com AGENT_BACKEND=hermes (os agents rodam no Hermes, fora desta
-# imagem). Para AGENT_BACKEND=goose, use a imagem ../Dockerfile.goose (orchestrator +
-# goose + recipes na mesma imagem — também já inclui a dashboard).
+# Image for the ORCHESTRATION SERVICE (light — Bun only) + the observability
+# dashboard (built SPA, served on a secondary port, see DASHBOARD_PORT). Does
+# NOT include goose. Use this with AGENT_BACKEND=hermes (agents run on
+# Hermes, outside this image). For AGENT_BACKEND=goose, use
+# ../Dockerfile.goose instead (orchestrator + goose + recipes in the same
+# image — also includes the dashboard).
 #
-# Build (a partir da RAIZ yaoe-flow, pois precisa de dashboard/ no contexto):
-#   docker build -f app/Dockerfile -t orchestrator .
+# Build (from the yaoe-flow REPO ROOT, since it needs dashboard/ in context):
+#   docker build -f app/Dockerfile -t yaoe-flow .
 FROM oven/bun:1 AS dashboard-build
 WORKDIR /app/dashboard
 COPY dashboard/package.json ./
@@ -22,16 +23,17 @@ RUN bun install
 COPY app/tsconfig.json ./
 COPY app/src ./src
 COPY app/drizzle ./drizzle
-# SOULs de seed da entidade Agent (Fase 1) — lidas do disco em Docker
-# (EMBEDDED_SOULS fica vazio fora do build --compile). Sem isto o
-# seedAgentsFromSouls no boot não cria nenhum agente.
+# Seed SOULs for the Agent entity — read from disk in Docker (EMBEDDED_SOULS
+# is empty outside a `build --compile`). Without this, seedAgentsFromSouls at
+# boot creates no agents.
 COPY agents ./agents
 COPY --from=dashboard-build /app/dashboard/dist ./dashboard/dist
 
 RUN mkdir -p /app/data
 
-# HOST=0.0.0.0 é obrigatório em container: bind em "localhost" (default do
-# config p/ dev local) não é alcançável de fora via `docker run -p`/K8s Service.
+# HOST=0.0.0.0 is required in a container: binding on "localhost" (the
+# default meant for local dev) is not reachable from outside via
+# `docker run -p`/a K8s Service.
 ENV HOST=0.0.0.0 \
   PORT=4790 \
   DASHBOARD_PORT=4791

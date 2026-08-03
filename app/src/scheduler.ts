@@ -119,13 +119,13 @@ export async function manualStopRun(issueId: string, reason: string, ctx?: Linea
     const ctxs = resolveActiveContexts();
     ctx = ctxs[0];
     if (!ctx) {
-      log.scheduler.error({ issueId, reason }, "manualStopRun: nenhum contexto Linear ativo — operação abortada");
+      log.scheduler.error({ issueId, reason }, "manualStopRun: no active Linear context — operation aborted");
       return;
     }
     if (ctxs.length > 1) {
       log.scheduler.warn(
         { issueId, reason, connectionId: ctx.connectionId, totalContexts: ctxs.length },
-        "manualStopRun: ctx não fornecido, usando primeiro contexto ativo (pode não ser o correto)"
+        "manualStopRun: ctx not provided, using the first active context (may not be the right one)"
       );
     }
   }
@@ -170,14 +170,14 @@ export async function onStatusChange(issueId: string, stateName: string, ctx: Li
       issueId,
       "reviewer",
       "completed",
-      `Fechado por transição de status no Linear (→ ${stateName})`
+      `Closed by a status transition in Linear (→ ${stateName})`
     );
   } else if (!OCCUPIED_STATES.has(stateName)) {
     store.closeOpenRun(
       issueId,
       undefined,
       stateName === S.blocked ? "failed" : "completed",
-      `Fechado por transição de status no Linear (→ ${stateName})`
+      `Closed by a status transition in Linear (→ ${stateName})`
     );
   }
 
@@ -217,7 +217,7 @@ export async function tick(): Promise<void> {
     if (stuckMs > config.tickIntervalMs * 3) {
       log.scheduler.warn(
         { stuckMs },
-        "tick skipped: ciclo anterior ainda rodando há mais tempo que o esperado — se persistir, indica uma chamada travada apesar do httpTimeoutMs"
+        "tick skipped: previous cycle still running longer than expected — if this persists, it indicates a stuck call despite httpTimeoutMs"
       );
     } else {
       log.scheduler.debug("tick skipped: already running");
@@ -433,7 +433,7 @@ async function tryDispatchImpl(ctx: LinearContext, issueId: string, stateName: s
     if (stateName === S.planned) {
       log.scheduler.warn(
         { issueId, stateName, connectionId: ctx.connectionId },
-        "lock órfão em Planned — liberando pra honrar ready-to-implement"
+        "orphaned lock on Planned — releasing it to honor ready-to-implement"
       );
       await locks.releaseLock(ctx.connectionId, issueId);
       await locks.clearAttempts(ctx.connectionId, issueId);
@@ -493,7 +493,7 @@ async function tryDispatchImpl(ctx: LinearContext, issueId: string, stateName: s
     // de segundos e os webhooks seguintes viravam "tick skipped".
     log.scheduler.info(
       { issueId, stateName, connectionId: ctx.connectionId },
-      "estimating footprint before dispatch (async — tick não espera)"
+      "estimating footprint before dispatch (async — the tick does not wait)"
     );
     fire(estimateThenDispatch(ctx, issueId, stateName), "estimateThenDispatch", issueId);
     return "estimating";
@@ -801,7 +801,7 @@ export async function dispatchIssueNow(issueId: string, ctx?: LinearContext): Pr
   return {
     dispatched: false,
     reason:
-      "a issue não está num estado/gate elegível para dispatch agora (confira status, labels de curadoria, dependências, capacidade e footprint) — nada foi movido",
+      "the issue is not in a state/gate eligible for dispatch right now (check status, curation labels, dependencies, capacity and footprint) — nothing was moved",
   };
 }
 

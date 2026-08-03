@@ -27,7 +27,7 @@ harnessRoutes.get(
   "/",
   describeRoute({
     tags: ["Harness"],
-    summary: "Lista harnesses com detecção, settings e banners de budget",
+    summary: "List harnesses with detection, settings and budget banners",
     responses: { 200: jsonContent(harnessListResponse, "Harnesses") },
   }),
   (c) => {
@@ -46,7 +46,7 @@ harnessRoutes.post(
   "/detect-all",
   describeRoute({
     tags: ["Harness"],
-    summary: "Re-detecta todos os harnesses",
+    summary: "Re-detect all harnesses",
     responses: { 200: jsonContent(looseObject, "Detecções") },
   }),
   async (c) => {
@@ -60,7 +60,7 @@ harnessRoutes.get(
   "/:id/models",
   describeRoute({
     tags: ["Harness"],
-    summary: "Modelos aceitos pelo harness (do cache da detecção)",
+    summary: "Models accepted by the harness (from the detection cache)",
     responses: {
       200: jsonContent(harnessModelsResponse, "Modelos"),
       404: jsonContent(errorBody, "Harness desconhecido"),
@@ -84,7 +84,7 @@ harnessRoutes.post(
   "/:id/redetect",
   describeRoute({
     tags: ["Harness"],
-    summary: "Re-detecta um harness específico",
+    summary: "Re-detect a specific harness",
     responses: {
       200: jsonContent(looseObject, "Detecção atualizada"),
       404: jsonContent(errorBody, "Harness desconhecido"),
@@ -103,7 +103,7 @@ harnessRoutes.put(
   "/:id/budgets",
   describeRoute({
     tags: ["Harness"],
-    summary: "Atualiza budgets do harness",
+    summary: "Update harness budgets",
     responses: {
       200: jsonContent(okBody.extend({ budgets: looseObject }), "Budgets atualizados"),
       404: jsonContent(errorBody, "Harness desconhecido"),
@@ -131,7 +131,7 @@ harnessRoutes.get(
   "/budget-banners",
   describeRoute({
     tags: ["Harness"],
-    summary: "Banners de budget ativos",
+    summary: "Active budget banners",
     responses: { 200: jsonContent(looseObject, "Banners") },
   }),
   (c) => c.json({ banners: budgetBanners() satisfies BudgetStatus[] })

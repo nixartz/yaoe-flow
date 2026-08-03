@@ -221,11 +221,11 @@ export async function resolveGithubAuth(ctx: LinearContext | null | undefined): 
         committer = await fetchCommitterIdentity(creds, token);
         identityCache.set(creds.fingerprint, committer);
       } catch (e) {
-        // Sem identidade o push continua funcionando (o token é o que autentica)
-        // — os commits só ficam sem link pro perfil do bot. Não vale derrubar o run.
+        // Without identity the push still works (the token is what authenticates)
+        // — commits just end up without a link to the bot's profile. Not worth failing the run.
         log.github.warn(
           { connectionId: ctx.connectionId, appId: creds.appId, ...errFields(e) },
-          "não foi possível resolver a identidade de commit do App — commits sairão sem atribuição ao bot"
+          "could not resolve the App's commit identity — commits will go out without bot attribution"
         );
       }
     }

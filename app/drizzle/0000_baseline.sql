@@ -1,9 +1,10 @@
--- Migration baseline (§5.1): adota o banco EXISTENTE da dashboard sem recriar
--- nem perder dados. Todo o DDL usa IF NOT EXISTS de propósito — num banco novo
--- cria tudo; num banco real já populado é no-op (mesmas tabelas/índices do
--- antigo dashboard/schema.sql). Colunas adicionadas por ALTER em versões
--- antigas do serviço são normalizadas ANTES desta migration rodar
--- (ver normalizeLegacyRuns em src/db/index.ts).
+-- Baseline migration: adopts the dashboard's EXISTING database without
+-- recreating it or losing data. Every DDL statement deliberately uses IF NOT
+-- EXISTS — on a new database it creates everything; on a real, already
+-- populated database it is a no-op (same tables/indexes as the old
+-- dashboard/schema.sql). Columns added via ALTER in older versions of the
+-- service are normalized BEFORE this migration runs
+-- (see normalizeLegacyRuns in src/db/index.ts).
 CREATE TABLE IF NOT EXISTS runs (
   id TEXT PRIMARY KEY,
   backend TEXT NOT NULL,

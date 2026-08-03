@@ -146,7 +146,7 @@ export function proxyBaseUrl(): string {
 export function startOpenRouterProxy(): void {
   if (server) return;
   if (!config.openrouter.reconcile) {
-    log.openrouter.info("OPENROUTER_RECONCILE=false — proxy de reconciliação desligado");
+    log.openrouter.info("OPENROUTER_RECONCILE=false — reconciliation proxy disabled");
     return;
   }
 
@@ -171,7 +171,7 @@ export function startOpenRouterProxy(): void {
           if (!runId) {
             log.openrouter.warn(
               { path: url.pathname },
-              "chat/completions sem associação a um run — generation id não será capturado"
+              "chat/completions with no run association — generation id will not be captured"
             );
           }
         }
@@ -207,7 +207,7 @@ export function startOpenRouterProxy(): void {
         });
       } catch (e) {
         if (runId) endCapture(runId);
-        log.openrouter.error({ target, ...errFields(e) }, "proxy OpenRouter: falha ao falar com upstream");
+        log.openrouter.error({ target, ...errFields(e) }, "OpenRouter proxy: failed to reach upstream");
         return new Response(JSON.stringify({ error: "openrouter proxy upstream failed" }), {
           status: 502,
           headers: { "content-type": "application/json" },
@@ -236,7 +236,7 @@ export function startOpenRouterProxy(): void {
 
   log.openrouter.info(
     { url: proxyBaseUrl(), upstream: upstreamBase },
-    "OpenRouter reconcile proxy listening (goose OPENROUTER_HOST aponta pra cá)"
+    "OpenRouter reconcile proxy listening (goose OPENROUTER_HOST points here)"
   );
 }
 

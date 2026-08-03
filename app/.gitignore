@@ -6,7 +6,7 @@ bun.lockb
 dist/
 build/
 
-# env (commit só o .env.example)
+# env (only .env.example is committed)
 .env
 .env.local
 .myenv

@@ -1,51 +1,35 @@
-# Recipes do Goose
+# Goose recipes
 
-Recipes do [Goose](https://goose-docs.ai) usados quando o yaoe-flow roda
-com `AGENT_BACKEND=goose`. Um recipe por papel do pipeline, com a **SOUL** embutida no
-campo `instructions`:
+[Goose](https://block.github.io/goose/) recipes used when yaoe-flow runs with `AGENT_BACKEND=goose`. One recipe per pipeline role, with the **SOUL** embedded in the `instructions` field:
 
-| Recipe | Papel | Gerado de |
+| Recipe | Role | Generated from |
 |---|---|---|
-| `pmo.yaml` | refino (To Do→Refining→Planned) | `agents/pmo.SOUL.md` |
-| `dev.yaml` | implementa/corrige | `agents/dev.SOUL.md` |
-| `reviewer.yaml` | revisa a PR | `agents/reviewer.SOUL.md` |
+| `pmo.yaml` | refinement (To Do→Refining→Planned) | `agents/pmo.SOUL.md` |
+| `dev.yaml` | implements/fixes | `agents/dev.SOUL.md` |
+| `reviewer.yaml` | reviews the PR | `agents/reviewer.SOUL.md` |
 | `orchestrator.yaml` | planning + merge | `agents/orchestrator.SOUL.md` |
 
-## Fonte única da verdade
+## Single source of truth
 
-**Não edite os `.yaml` à mão.** Eles são gerados a partir das SOULs em `agents/`
-(+ `agents/COMMUNICATION_PROTOCOL.md`, concatenado em `instructions`). Para mudar o
-comportamento de um agent, edite a SOUL e regenere:
+**Do not edit the `.yaml` files by hand.** They are generated from the SOULs in `agents/` (+ `agents/COMMUNICATION_PROTOCOL.md`, concatenated into `instructions`). To change an agent's behavior, edit the SOUL and regenerate:
 
 ```bash
-bun recipes/build.ts        # rode a partir da raiz do yaoe-flow
+bun recipes/build.ts        # run from the yaoe-flow repo root
 ```
 
-O gerador valida o YAML resultante (via `Bun.YAML`, quando disponível).
+The generator validates the resulting YAML (via `Bun.YAML`, when available).
 
-## O que cada recipe traz
+## What each recipe carries
 
-- `instructions` — a SOUL + o protocolo de comunicação (system prompt do agent).
-- `prompt` — instrução de partida (headless); via ACP o input real chega na mensagem
-  do `prompt` (`issueId`/`mode`).
-- `settings.goose_provider` / `goose_model` — configuráveis na geração via env
-  (defaults: `openrouter` + `qwen/qwen3-coder`). Ver `docs/goose-setup.md` §1 e §3.
-- `extensions` — MCPs por papel (Linear / GitHub / `developer`). As **credenciais**
-  entram via **`env_keys`** (só o nome: `LINEAR_API_KEY`, `GITHUB_PERSONAL_ACCESS_TOKEN`);
-  o Goose resolve o valor do keyring/ambiente do goose — o segredo **não fica no
-  `.yaml`**. Ver `docs/goose-setup.md` §2.
+- `instructions` — the SOUL + the communication protocol (the agent's system prompt).
+- `prompt` — the starting instruction (headless); via ACP the real input arrives in the `prompt` message (`issueId`/`mode`).
+- `settings.goose_provider` / `goose_model` — configurable at generation time via env (defaults: `openrouter` + `qwen/qwen3-coder`). See [docs/harnesses.md](../docs/harnesses.md).
+- `extensions` — per-role MCPs (Linear / GitHub / `developer`). **Credentials** enter via **`env_keys`** (name only: `LINEAR_API_KEY`, `GITHUB_PERSONAL_ACCESS_TOKEN`); Goose resolves the value from its own keyring/environment — the secret **never lives in the `.yaml`**. See [docs/mcp-configuration.md](../docs/mcp-configuration.md).
 
-## Input da task (issueId / mode)
+## Task input (issueId / mode)
 
-Não é parâmetro do recipe: chega na **mensagem** do `prompt` (`issueId: …\nmode: …`),
-exatamente como a SOUL já espera — igual ao backend Hermes. Mantém os dois backends
-simétricos.
+Not a recipe parameter: it arrives in the **`prompt` message** (`issueId: …\nmode: …`), exactly as the SOUL already expects — same as the Hermes backend. Keeps both backends symmetric.
 
-## Como são usados (ACP)
+## How they are used (ACP)
 
-O serviço roda com `AGENT_BACKEND=goose` e **spawna `goose acp`** por dispatch,
-passando o recipe por **deeplink** (`base64(JSON(recipe))`) no `newSession` — o serviço
-computa isso do próprio `.yaml` (não precisa registrar nada num servidor). O papel→recipe
-é mapeado por `GOOSE_<PAPEL>_RECIPE` no `.env`. Use a imagem `Dockerfile.goose`
-(orchestrator + goose + estes recipes). Detalhes, provider e checklist em
-[`docs/goose-setup.md`](../docs/goose-setup.md).
+The service runs with `AGENT_BACKEND=goose` and **spawns `goose acp`** per dispatch, passing the recipe via **deeplink** (`base64(JSON(recipe))`) in `newSession` — the service computes this from the `.yaml` itself (nothing to register on a server). Role→recipe is mapped by `GOOSE_<ROLE>_RECIPE` in `.env`. Use the `Dockerfile.goose` image (orchestrator + goose + these recipes). Details, provider and checklist in [docs/harnesses.md](../docs/harnesses.md).

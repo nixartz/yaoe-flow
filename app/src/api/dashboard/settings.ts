@@ -110,7 +110,7 @@ settingsRoutes.get(
     try {
       return c.json({ urlKey: await organizationUrlKey() });
     } catch (e) {
-      log.dashboard.debug(errFields(e), "organizationUrlKey failed (link Linear indisponível)");
+      log.dashboard.debug(errFields(e), "organizationUrlKey failed (Linear link unavailable)");
       return c.json({ urlKey: null });
     }
   }

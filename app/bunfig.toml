@@ -1,4 +1,4 @@
-# Preload dos testes: fixa APP_ENCRYPTION_KEY e um banco temporário ANTES de
-# qualquer módulo da aplicação ser importado (bootstrap lê env no import).
+# Test preload: sets APP_ENCRYPTION_KEY and a temporary database BEFORE any
+# application module is imported (bootstrap reads env at import time).
 [test]
 preload = ["./test/setup.ts"]

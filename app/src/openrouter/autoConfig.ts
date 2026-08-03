@@ -31,7 +31,7 @@ function parseAutoConfig(raw: string): OpenRouterAutoRecipeConfig[] {
   } catch (e) {
     log.openrouter.warn(
       { err: e instanceof Error ? e.message : String(e) },
-      "OPENROUTER_AUTO_CONFIG JSON inválido — auto-router por recipe desligado"
+      "OPENROUTER_AUTO_CONFIG invalid JSON — per-recipe auto-router disabled"
     );
     return [];
   }

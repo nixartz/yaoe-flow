@@ -23,7 +23,7 @@ interface GenerationData {
 async function fetchGeneration(generationId: string, attempt: number): Promise<GenerationData | null> {
   const key = config.openrouter.apiKey || process.env.OPENROUTER_API_KEY || "";
   if (!key) {
-    log.openrouter.warn("OPENROUTER_API_KEY ausente — não dá pra reconciliar via /generation");
+    log.openrouter.warn("OPENROUTER_API_KEY missing — cannot reconcile via /generation");
     return null;
   }
   const base = config.openrouter.upstream.replace(/\/$/, "");
@@ -31,19 +31,19 @@ async function fetchGeneration(generationId: string, attempt: number): Promise<G
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${key}`,
-      "HTTP-Referer": "https://github.com/nixartz/ai-agents",
+      "HTTP-Referer": "https://github.com/nixartz/yaoe-flow",
       "X-Title": "yaoe-flow",
     },
   });
   if (res.status === 404) {
-    // Ainda não indexado — retry
+    // Not indexed yet — retry
     if (attempt < config.openrouter.reconcileRetries) return null;
-    log.openrouter.warn({ generationId, status: res.status }, "generation ainda indisponível após retries");
+    log.openrouter.warn({ generationId, status: res.status }, "generation still unavailable after retries");
     return null;
   }
   if (res.status === 402) {
-    // Créditos/pagamento — não adianta retry
-    log.openrouter.warn({ generationId, status: 402 }, "OpenRouter /generation retornou 402 (créditos)");
+    // Credits/payment — retrying will not help
+    log.openrouter.warn({ generationId, status: 402 }, "OpenRouter /generation returned 402 (credits)");
     return null;
   }
   if (!res.ok) {
@@ -145,7 +145,7 @@ export async function reconcileRunUsage(
   if (!complete) {
     log.openrouter.warn(
       { runId, targets: targets.length, fetchedNow, stillPending },
-      "reconciliação parcial — algumas generations ainda indisponíveis no OpenRouter"
+      "partial reconciliation — some generations still unavailable on OpenRouter"
     );
   }
 

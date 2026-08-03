@@ -91,7 +91,7 @@ export function bootServer(): void {
 
   if (!config.orchestratorEnabled) {
     log.server.warn(
-      "ORCHESTRATOR_ENABLED=false — tick de reconciliação e dispatch de agents DESLIGADOS; só a API (/health, /webhook/linear p/ auditoria) e a dashboard continuam de pé"
+      "ORCHESTRATOR_ENABLED=false — reconciliation tick and agent dispatch are OFF; only the API (/health, /webhook/linear for audit) and the dashboard stay up"
     );
   }
 
@@ -153,12 +153,12 @@ export function bootServer(): void {
     if (legacyAgentEnvs.length > 0) {
       log.server.warn(
         { envs: legacyAgentEnvs },
-        "DEPRECADAS: estas ENVs por papel só alimentam o SEED inicial de agents — o dispatch usa a entidade Agent (banco). Gerencie pelos agentes na dashboard e remova as ENVs."
+        "DEPRECATED: these per-role ENVs only feed the initial agent SEED — dispatch uses the Agent entity (database). Manage agents on the dashboard and remove these ENVs."
       );
     }
     if (process.env.AGENT_BACKEND !== undefined) {
       log.server.warn(
-        "AGENT_BACKEND é legacy (§7.3): o harness de cada dispatch vem do agente ATIVO do papel — a ENV vale só como fallback de seed/compatibilidade."
+        "AGENT_BACKEND is legacy: the harness for each dispatch comes from the role's ACTIVE agent — this ENV only serves as a seed/compatibility fallback."
       );
     }
   }

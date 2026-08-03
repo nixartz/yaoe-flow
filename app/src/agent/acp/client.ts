@@ -1,11 +1,11 @@
-// Cliente ACP genérico (§7.1) — extraído de goose.ts, que era o único
-// consumidor. Spawna um binário que fala ACP (`<bin> <args>`), JSON-RPC sobre
-// stdio via ndjson (SDK oficial @zed-industries/agent-client-protocol),
-// normaliza `session/update` para `NormalizedEvent` e devolve usage/session
-// id no resultado. Qualquer harness ACP (goose, claude-code, codex) monta um
-// `HarnessAdapter` por cima disto — a diferença entre eles é só o comando de
-// spawn e como o SOUL/prompt entra na sessão (deeplink de recipe vs. system
-// prompt simples).
+// Generic ACP client — extracted from goose.ts, which used to be the only
+// consumer. Spawns a binary that speaks ACP (`<bin> <args>`), JSON-RPC over
+// stdio via ndjson (the official @zed-industries/agent-client-protocol SDK),
+// normalizes `session/update` into `NormalizedEvent` and returns usage/session
+// id in the result. Every ACP harness (goose, claude-code, codex) builds a
+// `HarnessAdapter` on top of this — the only difference between them is the
+// spawn command and how the SOUL/prompt enters the session (recipe deeplink
+// vs. a plain system prompt).
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import type pino from "pino";
 import {
@@ -29,9 +29,9 @@ export interface AcpSpawnSpec {
 }
 
 export interface AcpNewSessionMeta {
-  /** goose: `_meta.recipeDeeplink`. Outros harness ACP não usam isto (system prompt vai no prompt inicial). */
+  /** goose: `_meta.recipeDeeplink`. Other ACP harnesses do not use this (the system prompt goes in the initial prompt instead). */
   recipeDeeplink?: string;
-  /** Suporte a notificações custom (goose accumulated usage). */
+  /** Support for custom notifications (goose accumulated usage). */
   gooseCustomNotifications?: boolean;
 }
 
@@ -39,50 +39,51 @@ export interface AcpRunOptions {
   spawn: AcpSpawnSpec;
   newSessionMeta?: AcpNewSessionMeta;
   /**
-   * Após `initialize`, chama `authenticate` com este methodId.
-   * Cursor ACP exige `cursor_login` antes de `session/new` (senão a sessão trava).
-   * Ver https://cursor.com/docs/cli/acp
+   * After `initialize`, calls `authenticate` with this methodId.
+   * Cursor ACP requires `cursor_login` before `session/new` (otherwise the session hangs).
+   * See https://cursor.com/docs/cli/acp
    */
   authenticateMethodId?: string;
-  /** Modelo a aplicar via setSessionModel após criar a sessão (Cursor ACP). */
+  /** Model to apply via setSessionModel after creating the session (Cursor ACP). */
   model?: string;
   /**
-   * Planning/merge do Orchestrator: resolveAcpModelId prioriza variantes
-   * com `fast=true` (grok-4.5 / composer-2.5 / qualquer fast do harness).
+   * Orchestrator planning/merge: resolveAcpModelId prioritizes variants
+   * with `fast=true` (grok-4.5 / composer-2.5 / whichever fast variant the harness has).
    */
   preferFast?: boolean;
   /**
-   * MCPs do agente ativo (banco) — vão no param `mcpServers` do `session/new`,
-   * que é a forma PADRÃO do ACP de plugar MCP numa sessão. O goose é a exceção:
-   * lá os MCPs já entram como `extensions` do recipe (deeplink), então ele
-   * passa a lista vazia pra não duplicar cada servidor.
+   * MCPs of the active agent (database) — go in the `mcpServers` param of
+   * `session/new`, which is the STANDARD ACP way to plug an MCP into a
+   * session. goose is the exception: there the MCPs already enter as recipe
+   * `extensions` (deeplink), so it passes an empty list to avoid duplicating
+   * each server.
    */
   mcpServers?: McpServerConfig[];
-  /** Primeiro turno (system prompt + task, quando o harness não usa recipe). */
+  /** First turn (system prompt + task, when the harness does not use a recipe). */
   promptText: string;
-  /** Teto de um turno (prompt). */
+  /** Ceiling of a single turn (prompt). */
   requestTimeoutMs: number;
-  /** Retries no MESMO processo/sessão quando o provider falha transitoriamente. */
+  /** Retries in the SAME process/session when the provider fails transiently. */
   promptRetries?: number;
   resumeSessionId?: string;
   /**
-   * Logger do run (`logger.agentLog({ harness, runId, role })`) — é o que faz
-   * o log sair com `feature: "agent"` + `harness` em vez do antigo
-   * `feature: "goose"` pra qualquer harness.
+   * Run logger (`logger.agentLog({ harness, runId, role })`) — this is what
+   * makes the log go out with `feature: "agent"` + `harness` instead of the
+   * old `feature: "goose"` for every harness.
    */
   log: pino.Logger;
   onEvent(evt: NormalizedEvent): void;
-  /** Side-channel de usage fora do schema padrão do SDK (goose custom). */
+  /** Usage side-channel outside the SDK's standard schema (goose custom). */
   onUsageSnapshot?(usage: HarnessUsage): void;
   /**
-   * Chamado logo após o spawn, ANTES de qualquer await — é como o adapter
-   * obtém a referência pra matar o processo NO MEIO de um run. O `process` do
-   * retorno só existe quando o turno já terminou (tarde demais pra kill).
+   * Called right after spawn, BEFORE any await — this is how the adapter
+   * gets the reference to kill the process MID-run. The `process` from the
+   * return value only exists once the turn has already finished (too late to kill).
    */
   onProcess?(p: AcpProcess): void;
 }
 
-/** Modelo enumerado pelo agente (`models.availableModels` do `session/new`). */
+/** Model enumerated by the agent (`models.availableModels` from `session/new`). */
 export interface AcpModelInfo {
   id: string;
   name?: string;
@@ -226,12 +227,12 @@ export function materializeMcpEnvKeys(
   });
 }
 
-/** Nome-base do modelId parametrizado do Cursor (`foo[bar=baz]` → `foo`). */
+/** Base name of Cursor's parameterized modelId (`foo[bar=baz]` → `foo`). */
 export function acpModelBaseId(id: string): string {
   return id.replace(/\[.*\]$/, "");
 }
 
-/** `fast=true` no bracket params (Cursor: `composer-2.5[fast=true]`, grok com effort+fast). */
+/** `fast=true` in the bracket params (Cursor: `composer-2.5[fast=true]`, grok with effort+fast). */
 export function acpModelHasFastTrue(modelId: string): boolean {
   return /(?:^|[,\[]\s*)fast\s*=\s*true(?:\s*[,\]|]|$)/i.test(modelId);
 }
@@ -247,11 +248,12 @@ function isGrok45Base(base: string): boolean {
 }
 
 /**
- * Score de variantes "rápidas" na lista do harness. Usado em planning/merge
- * do Orchestrator pra não ficar preso no Auto/default lento.
+ * Scores "fast" variants in the harness's model list. Used in the
+ * Orchestrator's planning/merge so it does not get stuck on the slow
+ * Auto/default model.
  *
- * Prioridade (Cursor): grok-4.5 + effort=high + fast → grok-4.5 + fast →
- * composer-2.5 + fast → qualquer outro com fast=true.
+ * Priority (Cursor): grok-4.5 + effort=high + fast → grok-4.5 + fast →
+ * composer-2.5 + fast → any other with fast=true.
  */
 export function scoreAcpFastModel(modelId: string): number {
   if (!acpModelHasFastTrue(modelId)) return -1;
@@ -264,10 +266,10 @@ export function scoreAcpFastModel(modelId: string): number {
 }
 
 /**
- * Escolhe o melhor modelId "rápido" disponível.
- * - default/auto/`default[]`: prioridade grok-4.5[fast] → composer-2.5[fast] → qualquer fast.
- * - modelo específico sem fast: mesma base com `fast=true`, se existir.
- * - já com fast=true (ou sem variante rápida): null (caller segue resolução normal).
+ * Picks the best available "fast" modelId.
+ * - default/auto/`default[]`: priority grok-4.5[fast] → composer-2.5[fast] → any fast.
+ * - a specific model without fast: same base with `fast=true`, if it exists.
+ * - already fast=true (or no fast variant): null (caller falls back to normal resolution).
  */
 export function pickPreferredFastAcpModelId(
   requested: string,
@@ -306,23 +308,23 @@ export function pickPreferredFastAcpModelId(
 
 export interface ResolveAcpModelIdOptions {
   /**
-   * Planning/merge do Orchestrator: prioriza variantes com `fast=true` quando
-   * o agente está em Auto/default[] (ou quando a base configurada tem variante rápida).
+   * Orchestrator planning/merge: prioritizes `fast=true` variants when the
+   * agent is on Auto/default[] (or when the configured base has a fast variant).
    */
   preferFast?: boolean;
 }
 
 /**
- * Resolve o modelo configurado contra o que o agente REALMENTE aceita.
+ * Resolves the configured model against what the agent ACTUALLY accepts.
  *
- * O Cursor expõe modelId parametrizado (`default[]`, `composer-2.5[fast=true]`,
- * `claude-opus-5[thinking=true,context=300k,…]`) e rejeita qualquer outra
- * string com `-32602 Invalid model value` — era exatamente o caso do "auto"
- * configurado na dashboard, que morria no setSessionModel e caía no default
- * silenciosamente. Aceitamos modelId exato, nome legível ("Auto",
- * "composer-2.5") e o nome-base antes do `[`.
+ * Cursor exposes a parameterized modelId (`default[]`, `composer-2.5[fast=true]`,
+ * `claude-opus-5[thinking=true,context=300k,…]`) and rejects any other
+ * string with `-32602 Invalid model value` — this was exactly the case for
+ * "auto" configured on the dashboard, which died in setSessionModel and
+ * silently fell back to the default. We accept an exact modelId, a
+ * human-readable name ("Auto", "composer-2.5") and the base name before `[`.
  *
- * `null` = não chamar setSessionModel (fica no default do agente).
+ * `null` = do not call setSessionModel (stays on the agent's default).
  */
 export function resolveAcpModelId(
   requested: string,
@@ -332,8 +334,8 @@ export function resolveAcpModelId(
 ): string | null {
   const available = models?.availableModels;
   if (!available?.length) {
-    // Agente não enumera modelos — repassa como veio (ex.: goose, que resolve
-    // o modelo por env/recipe e nem implementa setSessionModel).
+    // Agent does not enumerate models — pass through as-is (e.g. goose, which
+    // resolves the model via env/recipe and does not even implement setSessionModel).
     return requested;
   }
 
@@ -342,7 +344,7 @@ export function resolveAcpModelId(
     if (fast) {
       logger.info(
         { model: requested, modelId: fast, preferFast: true },
-        "acp: preferindo modelo rápido (planning/merge)"
+        "acp: preferring the fast model (planning/merge)"
       );
       return fast;
     }
@@ -358,8 +360,8 @@ export function resolveAcpModelId(
   if (byName) return byName.modelId;
   const byBase = available.find((m) => acpModelBaseId(m.modelId).toLowerCase() === lower);
   if (byBase) return byBase.modelId;
-  // "auto"/"default" é como a dashboard nomeia "deixa o harness escolher";
-  // no Cursor isso é o modelo de nome "Auto" (modelId "default[]").
+  // "auto"/"default" is how the dashboard names "let the harness choose";
+  // on Cursor that is the model named "Auto" (modelId "default[]").
   if (lower === "auto" || lower === "default") {
     const auto = pick(
       available.find((m) => m.name.toLowerCase() === "auto") ??
@@ -370,7 +372,7 @@ export function resolveAcpModelId(
   }
   logger.warn(
     { model: requested, currentModelId: models?.currentModelId, available: available.map((m) => m.modelId).slice(0, 40) },
-    "modelo configurado não existe na lista do harness — seguindo com o default da sessão"
+    "configured model does not exist in the harness list — falling back to the session default"
   );
   return null;
 }
@@ -422,9 +424,10 @@ function extractPromptResponseUsage(resp: unknown): HarnessUsage | null {
   return { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens };
 }
 
-// Métodos que o SDK 0.4.5 sabe tratar no lado cliente. Qualquer OUTRO método
-// (sem o prefixo `_` que o SDK usa como envelope de extensão) o SDK responde
-// com -32601 methodNotFound — foi o que acontecia com os `cursor/*`.
+// Methods the SDK 0.4.5 knows how to handle on the client side. Any OTHER
+// method (without the `_` prefix the SDK uses as an extension envelope) gets
+// a -32601 methodNotFound response from the SDK — this is what used to
+// happen with `cursor/*`.
 const ACP_CLIENT_METHODS = new Set([
   "session/update",
   "session/request_permission",
@@ -440,16 +443,17 @@ const ACP_CLIENT_METHODS = new Set([
 interface AcpStreamHooks {
   onSideChannel(kind: string, update: Record<string, unknown>): void;
   /**
-   * Resposta a um request que NÓS mandamos fora do SDK (ver rawRequest —
-   * workaround do bug de `setSessionModel` no SDK 0.4.5). Devolve true quando
-   * consumiu, e aí a linha não chega ao SDK (que não conhece aquele id).
+   * Response to a request WE sent outside the SDK (see rawRequest — a
+   * workaround for the `setSessionModel` bug in SDK 0.4.5). Returns true when
+   * it consumed it, in which case the line never reaches the SDK (which does
+   * not know that id).
    */
   onResponse(id: number | string, result: unknown, error: unknown): boolean;
   /**
-   * Request de extensão que o SDK rejeitaria (Cursor manda `cursor/ask_question`,
-   * `cursor/create_plan`, `cursor/update_todos` — SEM o `_` que o SDK exige).
-   * `cursor/create_plan` e `cursor/ask_question` são BLOQUEANTES: sem resposta
-   * o turno pendura. Quem implementa isto tem que responder pelo `respond`.
+   * Extension request the SDK would reject (Cursor sends `cursor/ask_question`,
+   * `cursor/create_plan`, `cursor/update_todos` — WITHOUT the `_` the SDK
+   * requires). `cursor/create_plan` and `cursor/ask_question` are BLOCKING:
+   * without a response the turn hangs. Whoever implements this must respond via `respond`.
    */
   onExtRequest(method: string, id: number | string, params: Record<string, unknown>): void;
   onExtNotification(method: string, params: Record<string, unknown>): void;
@@ -489,13 +493,13 @@ function filterAcpStream(
         const su = msg.params?.update?.sessionUpdate;
         if (su && !SAFE_SESSION_UPDATES.has(su)) {
           if (SIDE_CHANNEL_UPDATES.has(su) && msg.params?.update) hooks.onSideChannel(su, msg.params.update);
-          logger.debug({ sessionUpdate: su }, "acp session/update ignorado (fora do schema do SDK)");
+          logger.debug({ sessionUpdate: su }, "acp session/update ignored (outside the SDK schema)");
           return null;
         }
         return line;
       }
-      // Extensão fora do envelope `_` do SDK: tratamos AQUI, senão o SDK
-      // responde methodNotFound e a call bloqueante do Cursor morre.
+      // Extension outside the SDK's `_` envelope: handled HERE, otherwise the
+      // SDK responds methodNotFound and Cursor's blocking call dies.
       if (msg.method && !ACP_CLIENT_METHODS.has(msg.method) && !msg.method.startsWith("_")) {
         const params = (msg.params ?? {}) as Record<string, unknown>;
         if (msg.id !== undefined) hooks.onExtRequest(msg.method, msg.id, params);
@@ -503,7 +507,7 @@ function filterAcpStream(
         return null;
       }
     } catch {
-      /* não-JSON: repassa como está */
+      /* not JSON: pass through as-is */
     }
     return line;
   };
@@ -542,10 +546,10 @@ function filterAcpStream(
 }
 
 /**
- * Método de autenticação a usar depois do `initialize`. Deliberadamente NÃO
- * pega "o primeiro que o agente anuncia": o claude-code-acp anuncia um método
- * que não implementa. Só `cursor_login` (exigência real do Cursor ACP antes do
- * session/new) ou o que o adapter pedir explicitamente.
+ * Authentication method to use after `initialize`. Deliberately does NOT
+ * grab "the first one the agent announces": claude-code-acp announces a
+ * method it does not implement. Only `cursor_login` (the real Cursor ACP
+ * requirement before session/new) or whatever the adapter explicitly asks for.
  */
 function pickAuthMethodId(initResult: unknown, explicit?: string): string | undefined {
   if (explicit) return explicit;
@@ -554,10 +558,10 @@ function pickAuthMethodId(initResult: unknown, explicit?: string): string | unde
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  // O clearTimeout não é detalhe: sem ele cada request deixa um timer vivo até
-  // estourar (15 min no caso do prompt), segurando o event loop de quem chamou
-  // — era o que fazia scripts/CLI ficarem ~80s pendurados depois do trabalho
-  // ter terminado.
+  // clearTimeout is not a nitpick: without it, every request leaves a timer
+  // alive until it fires (15 min for the prompt case), holding the caller's
+  // event loop open — this is what made scripts/CLIs hang for ~80s after the
+  // work was already done.
   let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
     p,
@@ -569,24 +573,25 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   });
 }
 
-// Auto-retry de erro transitório do provider (mesma heurística do goose.ts
-// original — o texto "Ran into this error… please retry" é convenção do
-// goose, mas manter aqui não tem custo pros outros adapters: eles simplesmente
-// nunca emitem esse texto, então o regex nunca casa).
+// Auto-retry of a transient provider error (same heuristic as the original
+// goose.ts — the text "Ran into this error… please retry" is a goose
+// convention, but keeping it here costs nothing for the other adapters: they
+// simply never emit that text, so the regex never matches).
 const TRANSIENT_TURN_ERROR = /ran into this error[\s\S]{0,600}(?:please retry|transient or recoverable)/i;
 const TRANSIENT_REJECT = /empty response|rate.?limit|overloaded|429|502|503|529|ECONNRESET|ETIMEDOUT/i;
 
-// Cursor (e outros harness com provider próprio) NÃO falham o `session/prompt`
-// quando o provider recusa o turno: devolvem `stopReason: "end_turn"` e cospem
-// o erro como texto do agente. Sem detectar isto, o run era marcado "completed"
-// com zero trabalho feito e o scheduler entrava em loop de re-dispatch
-// ("re-dispatching worker for fix") até estourar maxAttempts.
-// Ex. real: "Error: NonRetriableError: Provider Error Too many MCP tools are
-// enabled for this model. Please disable some MCP servers and try again."
+// Cursor (and other harnesses with their own provider) do NOT fail
+// `session/prompt` when the provider refuses the turn: they return
+// `stopReason: "end_turn"` and spit the error out as agent text. Without
+// detecting this, the run used to be marked "completed" with zero work done
+// and the scheduler would enter a re-dispatch loop ("re-dispatching worker
+// for fix") until maxAttempts was hit.
+// Real example: "Error: NonRetriableError: Provider Error Too many MCP tools
+// are enabled for this model. Please disable some MCP servers and try again."
 const PROVIDER_TURN_ERROR = /\bError:\s*(?:Non)?RetriableError:\s*(.+)/i;
 const NON_RETRIABLE_TURN_ERROR = /\bNonRetriableError\b/i;
 
-/** Erro de provider cuspido como texto do agente (não como rejeição do JSON-RPC). */
+/** Provider error spat out as agent text (not as a JSON-RPC rejection). */
 function detectProviderTurnError(turnText: string): { message: string; retriable: boolean } | null {
   const m = PROVIDER_TURN_ERROR.exec(turnText);
   if (!m) return null;
@@ -613,8 +618,8 @@ export class AcpProcess {
 }
 
 /**
- * Encerra um agente ACP. Fechar o stdin PRIMEIRO é o fim-de-sessão do
- * protocolo (só o SIGTERM deixa o CLI dando voltas por dezenas de segundos
+ * Terminates an ACP agent. Closing stdin FIRST is the protocol's
+ * end-of-session (SIGTERM alone leaves the CLI spinning for tens of seconds
  * antes de sair).
  */
 function shutdownAcpProcess(proc: {
@@ -687,7 +692,7 @@ export async function runAcpTurn(opts: AcpRunOptions): Promise<{ result: AcpRunR
       proc.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`);
       proc.stdin.flush();
     } catch (e) {
-      logger.debug({ ...errFields(e) }, "acp: falha ao responder request de extensão (processo já morto?)");
+      logger.debug({ ...errFields(e) }, "acp: failed to respond to an extension request (process already dead?)");
     }
   }
 
@@ -821,7 +826,7 @@ export async function runAcpTurn(opts: AcpRunOptions): Promise<{ result: AcpRunR
         opts.onEvent({ kind: "plan", payload: { method, params } });
         return { outcome: { outcome: "rejected", reason: "image generation not supported by the orchestrator" } };
       default:
-        logger.debug({ method }, "acp: request de extensão sem handler específico — resposta vazia");
+        logger.debug({ method }, "acp: extension request without a specific handler — empty response");
         return {};
     }
   }
@@ -920,7 +925,7 @@ export async function runAcpTurn(opts: AcpRunOptions): Promise<{ result: AcpRunR
 
     // MCPs já resolvidos antes do spawn (segredos embutidos; agent env limpo).
     if (acpMcpServers.length > 0) {
-      logger.info({ mcpServers: acpMcpServers.map((m) => m.name) }, "acp: MCPs da sessão");
+      logger.info({ mcpServers: acpMcpServers.map((m) => m.name) }, "acp: session MCPs");
     }
 
     // §7.6: session resume — tenta `loadSession` quando há sessão anterior DA
@@ -942,7 +947,7 @@ export async function runAcpTurn(opts: AcpRunOptions): Promise<{ result: AcpRunR
       } catch (e) {
         logger.info(
           { resumeSessionId: id, ...errFields(e) },
-          "session resume falhou (agente sem loadSession ou sessão expirada) — começando do zero"
+          "session resume failed (agent without loadSession, or an expired session) — starting from scratch"
         );
         return null;
       }
@@ -980,12 +985,12 @@ export async function runAcpTurn(opts: AcpRunOptions): Promise<{ result: AcpRunR
           await rawRequest("session/set_model", { sessionId, modelId }, 15_000);
           logger.info(
             { model: requested, modelId, preferFast: !!opts.preferFast },
-            "acp: modelo da sessão aplicado"
+            "acp: session model applied"
           );
         } catch (e) {
           logger.warn(
             { model: requested, modelId, preferFast: !!opts.preferFast, ...errFields(e) },
-            "session/set_model falhou — seguindo com modelo default da sessão"
+            "session/set_model failed — continuing with the session default model"
           );
         }
       }
@@ -1006,7 +1011,7 @@ export async function runAcpTurn(opts: AcpRunOptions): Promise<{ result: AcpRunR
         const msg = e instanceof Error ? e.message : String(e);
         if (attempt < maxRetries && !msg.startsWith("acp timeout") && TRANSIENT_REJECT.test(msg)) {
           attempt++;
-          logger.warn({ attempt, maxRetries, error: msg.slice(0, 300) }, "acp prompt: erro transitório, retry na mesma sessão");
+          logger.warn({ attempt, maxRetries, error: msg.slice(0, 300) }, "acp prompt: transient error, retrying in the same session");
           await Bun.sleep(2_000 * attempt);
           continue;
         }
@@ -1027,7 +1032,7 @@ export async function runAcpTurn(opts: AcpRunOptions): Promise<{ result: AcpRunR
         });
         if (providerError.retriable && attempt < maxRetries) {
           attempt++;
-          logger.warn({ attempt, maxRetries, error: providerError.message }, "acp: erro de provider no turno, retry na mesma sessão");
+          logger.warn({ attempt, maxRetries, error: providerError.message }, "acp: provider error in the turn, retrying in the same session");
           await Bun.sleep(2_000 * attempt);
           continue;
         }
@@ -1044,7 +1049,7 @@ export async function runAcpTurn(opts: AcpRunOptions): Promise<{ result: AcpRunR
           await Bun.sleep(2_000 * attempt);
           continue;
         }
-        throw new Error(`provider error persistiu após ${attempt} retry(s): ${turnTail.trim().slice(-300)}`);
+        throw new Error(`provider error persisted after ${attempt} retry(s): ${turnTail.trim().slice(-300)}`);
       }
       // Usage padrão do ACP vem na RESPOSTA do prompt. O side-channel do goose
       // (totais acumulados) tem prioridade quando existe; sem ele, o do turno

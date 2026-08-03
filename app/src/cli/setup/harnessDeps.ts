@@ -64,12 +64,12 @@ export const HARNESS_DEP_SPECS: HarnessDepSpec[] = [
         ? {
             cmd: "powershell",
             args: ["-NoProfile", "-Command", "irm 'https://cursor.com/install?win32=true' | iex"],
-            label: "instalador oficial Cursor CLI (PowerShell)",
+            label: "official Cursor CLI installer (PowerShell)",
           }
         : {
             cmd: "bash",
             args: ["-lc", "curl -fsS https://cursor.com/install | bash"],
-            label: "instalador oficial Cursor CLI (curl | bash)",
+            label: "official Cursor CLI installer (curl | bash)",
           },
     docsUrl: "https://cursor.com/docs/cli/installation",
   },
@@ -87,7 +87,7 @@ export const HARNESS_DEP_SPECS: HarnessDepSpec[] = [
     kind: "http-gateway",
     requiredBin: "hermes",
     manualHint:
-      "Hermes não usa adapter ACP — é um gateway HTTP. Instale o Hermes Agent na máquina/VM e aponte HERMES_*_URL na config (docs/hermes-setup.md).",
+      "Hermes does not use an ACP adapter — it is an HTTP gateway. Install the Hermes Agent on the machine/VM and point HERMES_*_URL in the config (docs/harnesses.md).",
     docsUrl: "https://github.com/NousResearch/hermes-agent",
   },
   {
@@ -98,7 +98,7 @@ export const HARNESS_DEP_SPECS: HarnessDepSpec[] = [
     installShell: {
       cmd: "bash",
       args: ["-lc", "curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | bash"],
-      label: "instalador oficial Goose CLI",
+      label: "official Goose CLI installer",
     },
     docsUrl: "https://block.github.io/goose/docs/getting-started/installation",
   },
@@ -218,15 +218,15 @@ function linkNpmBin(npmPrefix: string, binName: string): void {
   const src = join(npmPrefix, "node_modules", ".bin", binName);
   const dest = join(binDir, binName);
   if (!existsSync(src)) {
-    throw new Error(`npm instalou o pacote mas não gerou o bin ${binName} em ${src}`);
+    throw new Error(`npm installed the package but did not generate the ${binName} bin at ${src}`);
   }
   try {
     unlinkSync(dest);
   } catch {
-    /* não existia */
+    /* did not exist */
   }
   if (process.platform === "win32") {
-    // No Windows o .bin costuma ser .cmd — copiamos o nome esperado via symlink se possível.
+    // On Windows the .bin is usually .cmd — we copy the expected name via symlink when possible.
     symlinkSync(src, dest);
   } else {
     symlinkSync(src, dest);
@@ -236,7 +236,7 @@ function linkNpmBin(npmPrefix: string, binName: string): void {
 
 async function runNpmInstall(pkg: string): Promise<void> {
   const npm = (await whichBin("npm")) ?? (await whichBin("bun"));
-  if (!npm) throw new Error("nem npm nem bun no PATH — necessário pra instalar pacotes ACP/CLI");
+  if (!npm) throw new Error("neither npm nor bun on PATH — required to install ACP/CLI packages");
 
   const prefix = harnessNpmPrefix();
   mkdirSync(prefix, { recursive: true });

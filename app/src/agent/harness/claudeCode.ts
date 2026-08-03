@@ -47,7 +47,7 @@ export function prepareClaudeCodeAttribution(input: AcpSpawnContext, env: Record
   } catch (e) {
     log.agent.warn(
       { harness: "claude-code", runId: input.runId, configDir, ...errFields(e) },
-      "não foi possível montar CLAUDE_CONFIG_DIR pra atribuição — seguindo com ~/.claude do host"
+      "could not build CLAUDE_CONFIG_DIR for attribution — continuing with the host's ~/.claude"
     );
     return { env };
   }

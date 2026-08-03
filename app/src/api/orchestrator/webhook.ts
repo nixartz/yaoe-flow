@@ -73,7 +73,7 @@ webhookRoutes.post(
         );
       } else if (!config.orchestratorEnabled) {
         log.webhook.debug(
-          "orchestrator disabled (ORCHESTRATOR_ENABLED=false) — webhook só auditado, scheduler não acionado"
+          "orchestrator disabled (ORCHESTRATOR_ENABLED=false) — webhook only audited, scheduler not triggered"
         );
       }
     } else {

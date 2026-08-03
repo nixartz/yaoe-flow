@@ -1,5 +1,5 @@
--- Multi-Linear connections: N workspaces Linear por instância do orchestrator.
--- Tabela própria (não settings flat), coluna de auditoria em runs/webhook_events.
+-- Multi-Linear connections: N Linear workspaces per orchestrator instance.
+-- Its own table (not flat settings), plus an audit column on runs/webhook_events.
 CREATE TABLE linear_connections (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

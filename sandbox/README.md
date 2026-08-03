@@ -1,53 +1,27 @@
-# Sandbox — smoke test por harness real (§9.2)
+# Sandbox — real-harness smoke test
 
-> Requisito do blueprint: testes CONTRA o CLI/binário de verdade, um por
-> harness, fora do CI (exige credenciais e CLIs instalados na máquina do
-> operador). O contract suite (`bun test`, mock ACP) já cobre a lógica do
-> cliente/normalização/liveness sem custo de LLM — isto aqui é o passo humano
-> de confiança antes de ativar um harness novo em produção.
+> Requirement: tests AGAINST the real CLI/binary, one per harness, outside CI (needs credentials and CLIs installed on the operator's machine). The contract suite (`bun test`, mock ACP) already covers client/normalization/liveness logic at no LLM cost — this is the human confidence step before activating a new harness in production.
 
-## Pré-requisitos
+## Prerequisites
 
-1. **Repositório de sandbox** no GitHub — um repo pequeno e descartável (não
-   um repo real do produto) onde os agents podem clonar, criar branch e abrir
-   PR sem risco. Crie um `sandbox-orchestrator` vazio na sua conta/org de
-   testes.
-2. **Time de sandbox no Linear** com o workflow padrão (`To Do`, `Refining`,
-   `Planned`, `In Progress`, `Code Review`, `In Review`, `Pending Merge`,
-   `Reopened`, `Completed`, `Blocked` — ver `STATE_*` em `.env.example`) e as
-   labels `ready-to-refine`/`ready-to-implement`/`ready-to-merge`.
-3. **Issue de teste** nesse time, descrevendo uma tarefa trivial e segura
-   (ex.: "adicionar um comentário no README explicando o propósito do repo").
-4. O harness a testar **instalado e logado/com API key** na máquina do
-   operador (ver tela Harness → detecção/instruções por harness).
-5. `.env` do `app/` apontando pro time/repo de sandbox (`LINEAR_TEAM_ID`,
-   `AGENT_AUTHORIZED_ORGS` incluindo a org do repo de sandbox).
+1. **A sandbox repository** on GitHub — a small, disposable repo (not a real product repo) where agents can clone, branch and open a PR risk-free. Create an empty `sandbox-orchestrator` in your test account/org.
+2. **A sandbox team in Linear** with the standard workflow (`To Do`, `Refining`, `Planned`, `In Progress`, `Code Review`, `In Review`, `Pending Merge`, `Reopened`, `Completed`, `Blocked` — see `STATE_*` in `.env.example`) and the `ready-to-refine`/`ready-to-implement`/`ready-to-merge` labels.
+3. **A test issue** in that team, describing a trivial, safe task (e.g. "add a comment to the README explaining the repo's purpose").
+4. The harness under test **installed and logged in / with an API key** on the operator's machine (see the Harness screen → detection/instructions per harness).
+5. `app/`'s `.env` pointing at the sandbox team/repo (`LINEAR_TEAM_ID`, `AGENT_AUTHORIZED_ORGS` including the sandbox repo's org).
 
-## Roteiro mínimo por harness
+## Minimal script per harness
 
-Com o serviço rodando (`bun run dev` em `app/`) e a issue de sandbox com a
-label `ready-to-refine`:
+With the service running (`bun run dev` in `app/`) and the sandbox issue carrying the `ready-to-refine` label:
 
-1. **detect** — tela Harness confirma instalado + logado pro harness em teste.
-2. **planning** — mova/aguarde a issue entrar em `Refining`; confira que o
-   footprint foi estimado (dashboard → Histórico → run do PMO).
-3. **implement** — com `ready-to-implement` na issue em `Planned`, aguarde o
-   dispatch do worker (ou use **dispatch manual** na tela Ao vivo); confirme
-   que a PR foi aberta no repo de sandbox e o link anexado à issue.
-4. **review + merge** — acompanhe o ciclo até `Completed`; confira
-   `costSource`/tokens/refs externas no RunDetailSheet.
-5. **kill no meio de um segundo run** — dispare um novo dispatch (modo `fix`,
-   reabrindo a issue) e use o botão "Encerrar" no RunDetailSheet enquanto o
-   run está `running`; confirme que o processo morre (harness com
-   `capabilities.kill`) e que o reclaim/circuit breaker reage no próximo tick.
+1. **detect** — the Harness screen confirms the harness under test is installed + logged in.
+2. **planning** — move/wait for the issue to enter `Refining`; confirm the footprint was estimated (dashboard → History → the PMO run).
+3. **implement** — with `ready-to-implement` on the `Planned` issue, wait for the dev dispatch (or use **manual dispatch** on the Live screen); confirm the PR was opened in the sandbox repo and its link attached to the issue.
+4. **review + merge** — follow the cycle through to `Completed`; check `costSource`/tokens/external refs in the RunDetailSheet.
+5. **kill mid-run on a second run** — trigger a new dispatch (`fix` mode, reopening the issue) and use the "Stop" button on the RunDetailSheet while the run is `running`; confirm the process dies (harness with `capabilities.kill`) and that reclaim/circuit-breaker react on the next tick.
 
-Registre o resultado (versão do CLI testada, quirks observados) em
-[`../docs/harness-notes.md`](../docs/harness-notes.md).
+Record the result (CLI version tested, quirks observed) in the dashboard or your own notes — the old `docs/harness-notes.md` reference was pre-extraction; port it back if you need a durable log.
 
-## Por que isto não roda no CI
+## Why this does not run in CI
 
-Precisa de: CLI instalado e autenticado (contas pessoais, D5), credenciais
-reais do Linear/GitHub, e produz efeitos reais num repositório (branch, PR) —
-tudo isso é exatamente o que o CI (§9.4) evita de propósito. O contract suite
-(`bun test`) é o substituto seguro pra CI; este roteiro é o complemento manual
-antes de promover um harness novo pra produção.
+It needs: an installed and authenticated CLI (personal accounts), real Linear/GitHub credentials, and it produces real effects on a repository (branch, PR) — exactly what CI is meant to avoid. The contract suite (`bun test`) is the safe CI substitute; this script is the manual complement before promoting a new harness to production.

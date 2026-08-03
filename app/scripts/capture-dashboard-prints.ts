@@ -1,11 +1,12 @@
-// Captura os prints do docs/dashboard-guide.md (§10 do blueprint): navega a
-// dashboard REAL (Chrome headless via puppeteer-core, viewport 1280×800, tema
-// claro) logada num banco populado pelo seed-demo — nunca com dados reais.
+// Captures the dashboard documentation screenshots: navigates the REAL
+// dashboard (headless Chrome via puppeteer-core, 1280×800 viewport, light
+// theme) logged into a database populated by seed-demo — never with real
+// data.
 //
-// Pré-requisitos:
-//   1. banco demo:  DASHBOARD_DB_PATH=/tmp/demo.sqlite bun scripts/seed-demo.ts
-//   2. serviço:     mesmo DASHBOARD_DB_PATH + DASHBOARD_STATIC_DIR=../dashboard/dist
-//   3. (opcional) 2º serviço com banco VAZIO pra tela de first-access
+// Prerequisites:
+//   1. demo database: DASHBOARD_DB_PATH=/tmp/demo.sqlite bun scripts/seed-demo.ts
+//   2. service:        same DASHBOARD_DB_PATH + DASHBOARD_STATIC_DIR=../dashboard/dist
+//   3. (optional) a 2nd service with an EMPTY database for the first-access screen
 //
 // Uso:
 //   BASE_URL=http://localhost:14791 DEMO_USER=ana DEMO_PASSWORD=... \
@@ -33,20 +34,21 @@ const CHROME =
   );
 
 if (!CHROME) {
-  console.error("Chrome não encontrado — defina CHROME_BIN.");
+  console.error("Chrome not found — set CHROME_BIN.");
   process.exit(1);
 }
 
 async function newPage(browser: Browser): Promise<Page> {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
-  // Padrão de captura (§10): tema claro, sempre.
+  // Capture standard: always light theme.
   await page.evaluateOnNewDocument(() => localStorage.setItem("dashboard-theme", "light"));
   return page;
 }
 
-// SSE mantém a conexão aberta e o goto às vezes nem resolve o lifecycle — navega
-// com timeout curto e segue em frente; o print espera um settle fixo depois.
+// SSE keeps the connection open and goto sometimes never resolves the
+// lifecycle — navigate with a short timeout and move on; the screenshot
+// waits a fixed settle time afterward.
 async function nav(page: Page, url: string): Promise<void> {
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
 }
@@ -54,7 +56,7 @@ async function nav(page: Page, url: string): Promise<void> {
 async function shot(page: Page, rel: string): Promise<void> {
   const path = resolve(OUT_DIR, rel);
   mkdirSync(dirname(path), { recursive: true });
-  // `networkidle` nunca fecha com SSE aberto — espera fixa pra gráficos/queries.
+  // `networkidle` never fires with SSE open — fixed wait for charts/queries.
   await new Promise((r) => setTimeout(r, 1500));
   await page.screenshot({ path: path as `${string}.png` });
   console.log(`✓ ${rel}`);
@@ -72,14 +74,14 @@ async function main(): Promise<void> {
   await Promise.all([page.waitForNavigation({ waitUntil: "load" }).catch(() => {}), page.click('button[type="submit"]')]);
   await new Promise((r) => setTimeout(r, 1200));
 
-  // Telas principais
+  // Main screens
   await nav(page, `${BASE_URL}/`);
   await shot(page, "overview/01-visao-geral.png");
   await nav(page, `${BASE_URL}/live`);
   await shot(page, "live/01-ao-vivo.png");
   await nav(page, `${BASE_URL}/history`);
   await shot(page, "history/01-historico.png");
-  // RunDetailSheet: abre o primeiro run da tabela
+  // RunDetailSheet: opens the first run in the table
   const firstRow = await page.$("table tbody tr");
   if (firstRow) {
     await firstRow.click();
@@ -92,7 +94,7 @@ async function main(): Promise<void> {
   await nav(page, `${BASE_URL}/logs`);
   await shot(page, "logs/01-logs.png");
 
-  // Config: visão geral, busca + edição inline
+  // Config: overview, search + inline edit
   await nav(page, `${BASE_URL}/config`);
   await shot(page, "config/01-configuracao.png");
   await page.waitForSelector('input[placeholder="Buscar por nome ou descrição…"]', { timeout: 10_000 });
@@ -105,7 +107,7 @@ async function main(): Promise<void> {
   }
   await shot(page, "config/02-busca-e-edicao-inline.png");
 
-  // Users: lista + formulário de novo usuário
+  // Users: list + new-user form
   await nav(page, `${BASE_URL}/users`);
   await shot(page, "users/01-usuarios.png");
   await page.waitForSelector("table tbody tr", { timeout: 10_000 }).catch(() => {});
@@ -120,11 +122,11 @@ async function main(): Promise<void> {
   await new Promise((r) => setTimeout(r, 300));
   await shot(page, "users/02-novo-usuario.png");
 
-  // Meu perfil
+  // Profile
   await nav(page, `${BASE_URL}/profile`);
   await shot(page, "profile/01-meu-perfil.png");
 
-  // Agents (Fase 1): lista por papel + editor (3 abas)
+  // Agents: per-role list + editor (3 tabs)
   await nav(page, `${BASE_URL}/agents`);
   await page.waitForSelector(".cursor-pointer", { timeout: 10_000 }).catch(() => {});
   await shot(page, "agents/01-agents.png");
@@ -149,16 +151,16 @@ async function main(): Promise<void> {
     }
   }
 
-  // Harness (Fase 2): detecção + capabilities + budgets
+  // Harness: detection + capabilities + budgets
   await nav(page, `${BASE_URL}/harness`);
   await page.waitForSelector("h1", { timeout: 10_000 }).catch(() => {});
   await shot(page, "harness/01-harness.png");
 
-  // Notificações (Fase 3): canais + matriz canal×evento
+  // Notifications: channels + channel×event matrix
   await nav(page, `${BASE_URL}/notifications`);
   await shot(page, "notifications/01-notificacoes.png");
 
-  // First-access (2º serviço com banco vazio)
+  // First-access (2nd service with an empty database)
   if (FIRST_ACCESS_URL) {
     const fa = await newPage(browser);
     await nav(fa, FIRST_ACCESS_URL);
@@ -167,7 +169,7 @@ async function main(): Promise<void> {
   }
 
   await browser.close();
-  console.log(`prints salvos em ${OUT_DIR}`);
+  console.log(`screenshots saved to ${OUT_DIR}`);
 }
 
 main().catch((e) => {

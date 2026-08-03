@@ -11,9 +11,9 @@ readinessRoutes.get(
   "/readiness",
   describeRoute({
     tags: ["Readiness"],
-    summary: "Snapshot de prontidão das candidatas do orquestrador (Valkey)",
+    summary: "Readiness snapshot of orchestrator candidates (Valkey)",
     description:
-      "Lê o cache gravado no fim de cada tick — não consulta o Linear. Sem snapshot = próximo tick ainda não rodou.",
+      "Reads the cache written at the end of each tick — does not query Linear. No snapshot = the next tick has not run yet.",
     responses: { 200: jsonContent(readinessListResponse, "Snapshots por connection") },
   }),
   validator("query", readinessQuery),

@@ -1,6 +1,6 @@
--- Fases 1–3 do blueprint multi-harness: agents como entidade (§6.1), snapshot
--- por run (§6.4), usage/custo/refs externas (§7.5), cache de detecção+budgets
--- por harness (§7.4) e notificações (§8.1).
+-- Multi-harness blueprint phases 1-3: agents as an entity, per-run snapshot,
+-- usage/cost/external refs, per-harness detection+budget cache, and
+-- notifications.
 CREATE TABLE agents (
   id TEXT PRIMARY KEY,
   role TEXT NOT NULL CHECK (role IN ('pmo', 'senior-engineer', 'reviewer', 'orchestrator')),

@@ -13,7 +13,7 @@ configRoutes.get(
   "/config",
   describeRoute({
     tags: ["Config"],
-    summary: "Configuração efetiva + recipes Goose ativos",
+    summary: "Effective configuration + active Goose recipes",
     responses: { 200: jsonContent(configResponse, "Config") },
   }),
   (c) => {

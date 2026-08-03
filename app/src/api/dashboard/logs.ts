@@ -13,7 +13,7 @@ logsRoutes.get(
   "/logs/recent",
   describeRoute({
     tags: ["Logs"],
-    summary: "Últimas linhas de log",
+    summary: "Most recent log lines",
     responses: { 200: jsonContent(logsRecentResponse, "Logs recentes") },
   }),
   validator("query", logsRecentQuery),
@@ -27,7 +27,7 @@ logsRoutes.get(
   "/logs/stream",
   describeRoute({
     tags: ["Logs"],
-    summary: "SSE de log lines ao vivo",
+    summary: "Live SSE stream of log lines",
     responses: { 200: sseContent },
   }),
   (c) =>

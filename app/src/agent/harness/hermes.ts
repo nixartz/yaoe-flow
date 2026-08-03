@@ -88,7 +88,7 @@ async function detect(): Promise<HarnessDetection> {
       installed: false,
       authStatus: "unknown",
       installHint:
-        "Hermes é gateway HTTP (não ACP). Suba o Hermes Agent e configure HERMES_*_URL — ver docs/hermes-setup.md",
+        "Hermes is an HTTP gateway (not ACP). Start the Hermes Agent and configure HERMES_*_URL — see docs/harnesses.md",
       checkedAt: Date.now(),
     };
   }

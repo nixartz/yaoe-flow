@@ -48,7 +48,7 @@ export async function seedAdminFromEnv(): Promise<void> {
   if (!empty) {
     if (envUser || envPassword) {
       log.dashboard.warn(
-        "DASHBOARD_USER/DASHBOARD_PASSWORD estão setadas mas são IGNORADAS (deprecadas): já existem usuários no banco — gerencie pela tela Users e remova as ENVs"
+        "DASHBOARD_USER/DASHBOARD_PASSWORD are set but IGNORED (deprecated): users already exist in the database — manage them on the Users screen and remove the ENVs"
       );
     }
     return;
@@ -59,14 +59,14 @@ export async function seedAdminFromEnv(): Promise<void> {
       await createUser({ name: envUser, username: envUser, password: envPassword, email: null });
       log.dashboard.warn(
         { user: envUser },
-        "primeiro admin criado a partir de DASHBOARD_USER/DASHBOARD_PASSWORD (DEPRECADAS — após este seed elas são ignoradas; remova-as do ambiente e gerencie usuários pela tela Users)"
+        "first admin created from DASHBOARD_USER/DASHBOARD_PASSWORD (DEPRECATED — ignored after this seed; remove them from the environment and manage users on the Users screen)"
       );
     } catch (e) {
-      log.dashboard.error(errFields(e), "falha no seed do admin via DASHBOARD_USER/DASHBOARD_PASSWORD");
+      log.dashboard.error(errFields(e), "failed to seed the admin via DASHBOARD_USER/DASHBOARD_PASSWORD");
     }
   } else {
     log.dashboard.info(
-      "nenhum usuário cadastrado — dashboard em modo first-access (formulário de setup no primeiro acesso)"
+      "no user registered — dashboard in first-access mode (setup form on first access)"
     );
   }
 }

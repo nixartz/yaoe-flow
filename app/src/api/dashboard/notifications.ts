@@ -29,7 +29,7 @@ notificationsRoutes.get(
   "/",
   describeRoute({
     tags: ["Notifications"],
-    summary: "Lista canais com regras e config mascarada",
+    summary: "List channels with rules and masked config",
     responses: { 200: jsonContent(looseObject, "Canais") },
   }),
   (c) => c.json({ channels: repo.listChannels().map(withRulesAndMaskedConfig), events: NOTIFICATION_EVENTS })
@@ -39,7 +39,7 @@ notificationsRoutes.post(
   "/",
   describeRoute({
     tags: ["Notifications"],
-    summary: "Cria canal de notificação",
+    summary: "Create a notification channel",
     responses: {
       200: jsonContent(okBody.extend({ channel: looseObject }), "Canal criado"),
       400: jsonContent(errorBody, "Erro de validação"),
@@ -67,7 +67,7 @@ notificationsRoutes.patch(
   "/:id",
   describeRoute({
     tags: ["Notifications"],
-    summary: "Atualiza canal",
+    summary: "Update a channel",
     responses: {
       200: jsonContent(okBody.extend({ channel: looseObject }), "Atualizado"),
       400: jsonContent(errorBody, "Erro"),
@@ -95,7 +95,7 @@ notificationsRoutes.delete(
   "/:id",
   describeRoute({
     tags: ["Notifications"],
-    summary: "Remove canal",
+    summary: "Delete a channel",
     responses: { 200: jsonContent(okBody, "Removido") },
   }),
   validator("param", idParam),
@@ -109,7 +109,7 @@ notificationsRoutes.put(
   "/:id/rules/:event",
   describeRoute({
     tags: ["Notifications"],
-    summary: "Toggle evento de um canal",
+    summary: "Toggle an event on a channel",
     responses: {
       200: jsonContent(looseObject, "Regra atualizada"),
       400: jsonContent(errorBody, "Erro"),
@@ -132,7 +132,7 @@ notificationsRoutes.post(
   "/:id/test",
   describeRoute({
     tags: ["Notifications"],
-    summary: "Testa canal com mensagem real",
+    summary: "Test a channel with a real message",
     responses: {
       200: jsonContent(looseObject, "Resultado do teste"),
       404: jsonContent(errorBody, "Canal não encontrado"),

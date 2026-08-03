@@ -13,7 +13,7 @@ queryRoutes.get(
   "/query/:entity/columns",
   describeRoute({
     tags: ["Query"],
-    summary: "Colunas disponíveis pra uma entidade",
+    summary: "Columns available for an entity",
     responses: {
       200: jsonContent(looseObject, "Colunas"),
       404: jsonContent(errorBody, "Entidade desconhecida"),
@@ -31,7 +31,7 @@ queryRoutes.post(
   "/query/:entity",
   describeRoute({
     tags: ["Query"],
-    summary: "Query genérica (fields/filter/sort/limit/page)",
+    summary: "Generic query (fields/filter/sort/limit/page)",
     responses: {
       200: jsonContent(looseObject, "Resultado da query"),
       400: jsonContent(errorBody, "Query inválida"),

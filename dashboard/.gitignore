@@ -1,6 +1,6 @@
-# Logs (só a pasta de log de runtime na raiz — "logs" sem barra também batia
-# com src/components/logs/, ignorando os componentes da tela de Logs por engano
-# tanto pro git quanto pro scanner de conteúdo do Tailwind)
+# Logs (only the runtime log dir at the root — "logs" without a slash also
+# matched src/components/logs/, accidentally ignoring the Logs screen
+# components for both git and the Tailwind content scanner)
 /logs
 *.log
 npm-debug.log*

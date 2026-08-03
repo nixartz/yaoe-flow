@@ -84,7 +84,7 @@ describe("ACP contract (mock agent)", () => {
 
   test("sem retries configurados, erro de provider propaga (run vira failed no caller)", async () => {
     const { resultPromise, cwd } = run("provider_error", { promptRetries: 0 });
-    expect(resultPromise).rejects.toThrow(/provider error persistiu/);
+    expect(resultPromise).rejects.toThrow(/provider error persisted/);
     rmSync(cwd, { recursive: true, force: true });
   });
 

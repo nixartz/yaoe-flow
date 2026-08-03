@@ -1,7 +1,7 @@
-// Seed de DEMONSTRAÇÃO da dashboard (§10 do blueprint): popula um banco
-// DESCARTÁVEL com runs/webhooks/logs fictícios plausíveis pra capturar os
-// prints do docs/dashboard-guide.md sem nenhuma credencial, issue de cliente
-// ou e-mail real. NUNCA aponte DASHBOARD_DB_PATH pro banco de produção.
+// DEMO seed for the dashboard: populates a DISPOSABLE database with
+// plausible fictional runs/webhooks/logs to capture documentation
+// screenshots without any real credential, customer issue or e-mail. NEVER
+// point DASHBOARD_DB_PATH at the production database.
 //
 // Uso:
 //   DASHBOARD_DB_PATH=/tmp/demo.sqlite APP_ENCRYPTION_KEY=$(openssl rand -hex 32) \
@@ -72,10 +72,10 @@ for (const r of runs) {
   });
 
   const steps: Array<[string, string | null, string | null, string | null]> = [
-    ["message_chunk", `Analisando a issue ${r.issue} e o repositório demo-org/demo-app…`, null, null],
+    ["message_chunk", `Analyzing issue ${r.issue} and the demo-org/demo-app repository…`, null, null],
     ["tool_call", null, "linear__get_issue", "completed"],
     ["tool_call", null, "developer__shell", "completed"],
-    ["message_chunk", "Plano montado. Executando as mudanças e abrindo a PR…", null, null],
+    ["message_chunk", "Plan ready. Applying the changes and opening the PR…", null, null],
     ["tool_call", null, "github__create_pull_request", r.status === "failed" ? "failed" : "completed"],
   ];
   steps.forEach(([kind, text, tool, toolStatus], i) => {
@@ -99,10 +99,10 @@ const insertWebhook = sqlite.query(
 );
 
 const webhooks = [
-  ["DEMO-101", "Adicionar filtro por período no relatório", "Ana (demo)", "To Do → Refining", 1],
-  ["DEMO-101", "Adicionar filtro por período no relatório", "Agente PMO", "Refining → Planned", 0],
-  ["DEMO-102", "Corrigir paginação da listagem", "Bruno (demo)", "Planned → In Progress", 1],
-  ["DEMO-103", "Exportar CSV no painel de vendas", "Ana (demo)", "backlog → To Do", 0],
+  ["DEMO-101", "Add a date-range filter to the report", "Ana (demo)", "To Do → Refining", 1],
+  ["DEMO-101", "Add a date-range filter to the report", "PMO Agent", "Refining → Planned", 0],
+  ["DEMO-102", "Fix listing pagination", "Bruno (demo)", "Planned → In Progress", 1],
+  ["DEMO-103", "Export CSV on the sales dashboard", "Ana (demo)", "backlog → To Do", 0],
 ] as const;
 
 webhooks.forEach(([identifier, title, actor, summary, trig], i) => {
@@ -141,5 +141,5 @@ logs.forEach(([level, feature, msg], i) => {
   });
 });
 
-console.log(`seed-demo: banco populado em ${bootstrap.dashboardDbPath}`);
+console.log(`seed-demo: database populated at ${bootstrap.dashboardDbPath}`);
 console.log(`  runs: ${runs.length} · webhooks: ${webhooks.length} · logs: ${logs.length}`);

@@ -42,7 +42,7 @@
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Estado do setup (first-access)",
+                "summary": "Setup state (first-access)",
                 "responses": {
                     "200": {
                         "description": "Setup status",
@@ -71,7 +71,7 @@
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Cria o primeiro admin (first-access)",
+                "summary": "Create the first admin (first-access)",
                 "responses": {
                     "200": {
                         "description": "Admin criado",
@@ -101,7 +101,7 @@
                         }
                     },
                     "400": {
-                        "description": "Validação falhou",
+                        "description": "Valida\u00e7\u00e3o falhou",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -119,7 +119,7 @@
                         }
                     },
                     "409": {
-                        "description": "Setup já concluído",
+                        "description": "Setup j\u00e1 conclu\u00eddo",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -192,7 +192,7 @@
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Login na dashboard",
+                "summary": "Dashboard login",
                 "responses": {
                     "200": {
                         "description": "Login OK",
@@ -222,7 +222,7 @@
                         }
                     },
                     "401": {
-                        "description": "Credenciais inválidas",
+                        "description": "Credenciais inv\u00e1lidas",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -240,7 +240,7 @@
                         }
                     },
                     "403": {
-                        "description": "Usuário inativo",
+                        "description": "Usu\u00e1rio inativo",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -276,7 +276,7 @@
                         }
                     },
                     "500": {
-                        "description": "Auth não configurada",
+                        "description": "Auth n\u00e3o configurada",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -326,7 +326,7 @@
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Logout da dashboard",
+                "summary": "Dashboard logout",
                 "responses": {
                     "200": {
                         "description": "Logout OK",
@@ -356,10 +356,10 @@
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Usuário da sessão atual",
+                "summary": "Current session user",
                 "responses": {
                     "200": {
-                        "description": "Sessão atual",
+                        "description": "Sess\u00e3o atual",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -446,7 +446,7 @@
                 "tags": [
                     "Runs"
                 ],
-                "summary": "Lista runs com filtros e paginação",
+                "summary": "List runs with filters and pagination",
                 "responses": {
                     "200": {
                         "description": "Runs",
@@ -515,7 +515,7 @@
                 "tags": [
                     "Runs"
                 ],
-                "summary": "Runs em execução",
+                "summary": "Currently running runs",
                 "responses": {
                     "200": {
                         "description": "Runs ativas",
@@ -540,7 +540,7 @@
                 "tags": [
                     "Runs"
                 ],
-                "summary": "SSE de eventos de run",
+                "summary": "SSE stream of run events",
                 "responses": {
                     "200": {
                         "description": "Server-Sent Events stream",
@@ -561,7 +561,7 @@
                 "tags": [
                     "Runs"
                 ],
-                "summary": "Detalhe de um run",
+                "summary": "Run detail",
                 "responses": {
                     "200": {
                         "description": "Run encontrado",
@@ -578,7 +578,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrado",
+                        "description": "N\u00e3o encontrado",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -614,10 +614,10 @@
                 "tags": [
                     "Runs"
                 ],
-                "summary": "Reconcilia custo OpenRouter de um run",
+                "summary": "Reconcile a run's OpenRouter cost",
                 "responses": {
                     "200": {
-                        "description": "Reconciliação",
+                        "description": "Reconcilia\u00e7\u00e3o",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -631,7 +631,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrado",
+                        "description": "N\u00e3o encontrado",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -667,7 +667,7 @@
                 "tags": [
                     "Runs"
                 ],
-                "summary": "Dispatch manual de issue",
+                "summary": "Manual dispatch of an issue",
                 "responses": {
                     "200": {
                         "description": "Dispatch OK",
@@ -721,7 +721,7 @@
                 "tags": [
                     "Runs"
                 ],
-                "summary": "Encerra run manualmente",
+                "summary": "Stop a run manually",
                 "responses": {
                     "200": {
                         "description": "Encerrado",
@@ -768,7 +768,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrado",
+                        "description": "N\u00e3o encontrado",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -786,7 +786,7 @@
                         }
                     },
                     "409": {
-                        "description": "Não está em execução",
+                        "description": "N\u00e3o est\u00e1 em execu\u00e7\u00e3o",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -822,7 +822,7 @@
                 "tags": [
                     "Runs"
                 ],
-                "summary": "SSE de eventos de um run específico",
+                "summary": "SSE stream of a specific run's events",
                 "responses": {
                     "200": {
                         "description": "Server-Sent Events stream",
@@ -853,7 +853,7 @@
                 "tags": [
                     "Webhooks"
                 ],
-                "summary": "Lista webhook events com filtros e paginação",
+                "summary": "List webhook events with filters and pagination",
                 "responses": {
                     "200": {
                         "description": "Webhooks",
@@ -922,7 +922,7 @@
                 "tags": [
                     "Webhooks"
                 ],
-                "summary": "SSE de webhook events",
+                "summary": "SSE stream of webhook events",
                 "responses": {
                     "200": {
                         "description": "Server-Sent Events stream",
@@ -943,7 +943,7 @@
                 "tags": [
                     "Webhooks"
                 ],
-                "summary": "Detalhe de um webhook event",
+                "summary": "Webhook event detail",
                 "responses": {
                     "200": {
                         "description": "Webhook encontrado",
@@ -960,7 +960,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrado",
+                        "description": "N\u00e3o encontrado",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -996,7 +996,7 @@
                 "tags": [
                     "Logs"
                 ],
-                "summary": "Últimas linhas de log",
+                "summary": "Most recent log lines",
                 "responses": {
                     "200": {
                         "description": "Logs recentes",
@@ -1037,7 +1037,7 @@
                 "tags": [
                     "Logs"
                 ],
-                "summary": "SSE de log lines ao vivo",
+                "summary": "Live SSE stream of log lines",
                 "responses": {
                     "200": {
                         "description": "Server-Sent Events stream",
@@ -1113,7 +1113,7 @@
                         }
                     },
                     "400": {
-                        "description": "Erro de validação",
+                        "description": "Erro de valida\u00e7\u00e3o",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1236,7 +1236,7 @@
                 "summary": "Valida STATE_*/LABEL_* contra workflow states e labels do Linear",
                 "responses": {
                     "200": {
-                        "description": "Resultado da validação",
+                        "description": "Resultado da valida\u00e7\u00e3o",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1250,7 +1250,7 @@
                         }
                     },
                     "502": {
-                        "description": "Erro de conexão com Linear",
+                        "description": "Erro de conex\u00e3o com Linear",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1276,7 +1276,7 @@
                 "tags": [
                     "Settings"
                 ],
-                "summary": "urlKey do workspace Linear (base do link run→Linear)",
+                "summary": "urlKey do workspace Linear (base do link run\u2192Linear)",
                 "responses": {
                     "200": {
                         "description": "Workspace",
@@ -1301,10 +1301,10 @@
                 "tags": [
                     "Users"
                 ],
-                "summary": "Lista usuários",
+                "summary": "List users",
                 "responses": {
                     "200": {
-                        "description": "Usuários",
+                        "description": "Usu\u00e1rios",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1324,7 +1324,7 @@
                 "tags": [
                     "Users"
                 ],
-                "summary": "Cria usuário",
+                "summary": "Create user",
                 "responses": {
                     "200": {
                         "description": "Criado",
@@ -1354,7 +1354,7 @@
                         }
                     },
                     "400": {
-                        "description": "Erro de validação",
+                        "description": "Erro de valida\u00e7\u00e3o",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1416,7 +1416,7 @@
                 "tags": [
                     "Users"
                 ],
-                "summary": "Atualiza usuário",
+                "summary": "Update user",
                 "responses": {
                     "200": {
                         "description": "Atualizado",
@@ -1518,7 +1518,7 @@
                 "tags": [
                     "Users"
                 ],
-                "summary": "Troca a própria senha (exige senha atual)",
+                "summary": "Change your own password (requires the current password)",
                 "responses": {
                     "200": {
                         "description": "Senha alterada",
@@ -1540,7 +1540,7 @@
                         }
                     },
                     "400": {
-                        "description": "Erro de validação",
+                        "description": "Erro de valida\u00e7\u00e3o",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1620,7 +1620,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrado / backend não é goose",
+                        "description": "N\u00e3o encontrado / backend n\u00e3o \u00e9 goose",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1638,7 +1638,7 @@
                         }
                     },
                     "500": {
-                        "description": "Bun.YAML indisponível",
+                        "description": "Bun.YAML indispon\u00edvel",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1674,7 +1674,7 @@
                 "tags": [
                     "Config"
                 ],
-                "summary": "Configuração efetiva + recipes Goose ativos",
+                "summary": "Effective configuration + active Goose recipes",
                 "responses": {
                     "200": {
                         "description": "Config",
@@ -1725,7 +1725,7 @@
                 "tags": [
                     "Query"
                 ],
-                "summary": "Colunas disponíveis pra uma entidade",
+                "summary": "Columns available for an entity",
                 "responses": {
                     "200": {
                         "description": "Colunas",
@@ -1783,7 +1783,7 @@
                 "tags": [
                     "Query"
                 ],
-                "summary": "Query genérica (fields/filter/sort/limit/page)",
+                "summary": "Generic query (fields/filter/sort/limit/page)",
                 "responses": {
                     "200": {
                         "description": "Resultado da query",
@@ -1800,7 +1800,7 @@
                         }
                     },
                     "400": {
-                        "description": "Query inválida",
+                        "description": "Query inv\u00e1lida",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1955,7 +1955,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Lista agentes e roles",
+                "summary": "List agents and roles",
                 "responses": {
                     "200": {
                         "description": "Agentes",
@@ -1978,7 +1978,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Cria agente",
+                "summary": "Create agent",
                 "responses": {
                     "200": {
                         "description": "Agente criado",
@@ -2008,7 +2008,7 @@
                         }
                     },
                     "400": {
-                        "description": "Erro de validação",
+                        "description": "Erro de valida\u00e7\u00e3o",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2079,7 +2079,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Detalhe do agente",
+                "summary": "Agent detail",
                 "responses": {
                     "200": {
                         "description": "Agente encontrado",
@@ -2096,7 +2096,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrado",
+                        "description": "N\u00e3o encontrado",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2131,7 +2131,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Atualiza metadados do agente",
+                "summary": "Update the agent's metadata",
                 "responses": {
                     "200": {
                         "description": "Atualizado",
@@ -2223,7 +2223,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Ativa agente (troca atômica da variante do papel)",
+                "summary": "Activate agent (atomic swap of the role's variant)",
                 "responses": {
                     "200": {
                         "description": "Ativado",
@@ -2290,7 +2290,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Desativa agente",
+                "summary": "Deactivate agent",
                 "responses": {
                     "200": {
                         "description": "Desativado",
@@ -2357,10 +2357,10 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Lista versões da SOUL",
+                "summary": "List SOUL versions",
                 "responses": {
                     "200": {
-                        "description": "Versões",
+                        "description": "Vers\u00f5es",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2391,10 +2391,10 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Cria versão da SOUL (append-only)",
+                "summary": "Create a SOUL version (append-only)",
                 "responses": {
                     "200": {
-                        "description": "Versão criada",
+                        "description": "Vers\u00e3o criada",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2469,10 +2469,10 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Detalhe de uma versão",
+                "summary": "Version detail",
                 "responses": {
                     "200": {
-                        "description": "Versão",
+                        "description": "Vers\u00e3o",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2486,7 +2486,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrada",
+                        "description": "N\u00e3o encontrada",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2530,7 +2530,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Ativa uma versão específica",
+                "summary": "Activate a specific version",
                 "responses": {
                     "200": {
                         "description": "Ativada",
@@ -2604,10 +2604,10 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Exporta soulMarkdown da versão (text/markdown)",
+                "summary": "Export the version's soulMarkdown (text/markdown)",
                 "responses": {
                     "200": {
-                        "description": "Markdown da SOUL",
+                        "description": "SOUL markdown",
                         "content": {
                             "text/markdown": {
                                 "schema": {
@@ -2617,7 +2617,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrada",
+                        "description": "N\u00e3o encontrada",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2661,7 +2661,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Lista configs de harness do agente",
+                "summary": "List the agent's harness configs",
                 "responses": {
                     "200": {
                         "description": "Configs",
@@ -2697,7 +2697,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Atualiza config de harness (D3)",
+                "summary": "Update a harness config",
                 "responses": {
                     "200": {
                         "description": "Config atualizada",
@@ -2797,7 +2797,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Remove config de harness",
+                "summary": "Delete a harness config",
                 "responses": {
                     "200": {
                         "description": "Removida",
@@ -2863,7 +2863,7 @@
                 "tags": [
                     "Agents"
                 ],
-                "summary": "Troca o harness ativo do agente (D3)",
+                "summary": "Switch the agent's active harness",
                 "responses": {
                     "200": {
                         "description": "Harness trocado",
@@ -2948,7 +2948,7 @@
                 "tags": [
                     "Harness"
                 ],
-                "summary": "Lista harnesses com detecção, settings e banners de budget",
+                "summary": "List harnesses with detection, settings and budget banners",
                 "responses": {
                     "200": {
                         "description": "Harnesses",
@@ -2995,10 +2995,10 @@
                 "tags": [
                     "Harness"
                 ],
-                "summary": "Re-detecta todos os harnesses",
+                "summary": "Re-detect all harnesses",
                 "responses": {
                     "200": {
-                        "description": "Detecções",
+                        "description": "Detec\u00e7\u00f5es",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -3020,7 +3020,7 @@
                 "tags": [
                     "Harness"
                 ],
-                "summary": "Modelos aceitos pelo harness (do cache da detecção)",
+                "summary": "Models accepted by the harness (from the detection cache)",
                 "responses": {
                     "200": {
                         "description": "Modelos",
@@ -3112,10 +3112,10 @@
                 "tags": [
                     "Harness"
                 ],
-                "summary": "Re-detecta um harness específico",
+                "summary": "Re-detect a specific harness",
                 "responses": {
                     "200": {
-                        "description": "Detecção atualizada",
+                        "description": "Detec\u00e7\u00e3o atualizada",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -3165,7 +3165,7 @@
                 "tags": [
                     "Harness"
                 ],
-                "summary": "Atualiza budgets do harness",
+                "summary": "Update harness budgets",
                 "responses": {
                     "200": {
                         "description": "Budgets atualizados",
@@ -3266,7 +3266,7 @@
                 "tags": [
                     "Harness"
                 ],
-                "summary": "Banners de budget ativos",
+                "summary": "Active budget banners",
                 "responses": {
                     "200": {
                         "description": "Banners",
@@ -3291,7 +3291,7 @@
                 "tags": [
                     "Notifications"
                 ],
-                "summary": "Lista canais com regras e config mascarada",
+                "summary": "List channels with rules and masked config",
                 "responses": {
                     "200": {
                         "description": "Canais",
@@ -3314,7 +3314,7 @@
                 "tags": [
                     "Notifications"
                 ],
-                "summary": "Cria canal de notificação",
+                "summary": "Create a notification channel",
                 "responses": {
                     "200": {
                         "description": "Canal criado",
@@ -3344,7 +3344,7 @@
                         }
                     },
                     "400": {
-                        "description": "Erro de validação",
+                        "description": "Erro de valida\u00e7\u00e3o",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -3399,7 +3399,7 @@
                 "tags": [
                     "Notifications"
                 ],
-                "summary": "Atualiza canal",
+                "summary": "Update a channel",
                 "responses": {
                     "200": {
                         "description": "Atualizado",
@@ -3486,7 +3486,7 @@
                 "tags": [
                     "Notifications"
                 ],
-                "summary": "Remove canal",
+                "summary": "Delete a channel",
                 "responses": {
                     "200": {
                         "description": "Removido",
@@ -3527,7 +3527,7 @@
                 "tags": [
                     "Notifications"
                 ],
-                "summary": "Toggle evento de um canal",
+                "summary": "Toggle an event on a channel",
                 "responses": {
                     "200": {
                         "description": "Regra atualizada",
@@ -3603,7 +3603,7 @@
                 "tags": [
                     "Notifications"
                 ],
-                "summary": "Testa canal com mensagem real",
+                "summary": "Test a channel with a real message",
                 "responses": {
                     "200": {
                         "description": "Resultado do teste",
@@ -3620,7 +3620,7 @@
                         }
                     },
                     "404": {
-                        "description": "Canal não encontrado",
+                        "description": "Canal n\u00e3o encontrado",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -4040,7 +4040,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrada",
+                        "description": "N\u00e3o encontrada",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -4110,7 +4110,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrada",
+                        "description": "N\u00e3o encontrada",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -4344,7 +4344,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrada",
+                        "description": "N\u00e3o encontrada",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -4416,7 +4416,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrada",
+                        "description": "N\u00e3o encontrada",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -4488,7 +4488,7 @@
                         }
                     },
                     "404": {
-                        "description": "Não encontrada",
+                        "description": "N\u00e3o encontrada",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -4515,6 +4515,424 @@
                             "minLength": 1
                         },
                         "required": true
+                    }
+                ]
+            }
+        },
+        "/api/readiness": {
+            "get": {
+                "operationId": "getApiReadiness",
+                "tags": [
+                    "Readiness"
+                ],
+                "summary": "Readiness snapshot of orchestrator candidates (Valkey)",
+                "description": "Reads the cache written at the end of each tick \u2014 does not query Linear. No snapshot = the next tick has not run yet.",
+                "responses": {
+                    "200": {
+                        "description": "Snapshots por connection",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "ttlSeconds": {
+                                            "type": "number"
+                                        },
+                                        "snapshots": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "updatedAt": {
+                                                        "type": "number"
+                                                    },
+                                                    "connectionId": {
+                                                        "type": "string"
+                                                    },
+                                                    "connectionName": {
+                                                        "type": "string"
+                                                    },
+                                                    "organizationId": {
+                                                        "type": "string"
+                                                    },
+                                                    "organizationKey": {
+                                                        "anyOf": [
+                                                            {
+                                                                "type": "string"
+                                                            },
+                                                            {
+                                                                "type": "null"
+                                                            }
+                                                        ]
+                                                    },
+                                                    "capacity": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "refine": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "occupied": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "max": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "free": {
+                                                                        "type": "number"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "occupied",
+                                                                    "max",
+                                                                    "free"
+                                                                ]
+                                                            },
+                                                            "implement": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "occupied": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "max": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "free": {
+                                                                        "type": "number"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "occupied",
+                                                                    "max",
+                                                                    "free"
+                                                                ]
+                                                            },
+                                                            "review": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "occupied": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "max": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "free": {
+                                                                        "type": "number"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "occupied",
+                                                                    "max",
+                                                                    "free"
+                                                                ]
+                                                            },
+                                                            "merge": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "max": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "busy": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "mergingIssueId": {
+                                                                        "anyOf": [
+                                                                            {
+                                                                                "type": "string"
+                                                                            },
+                                                                            {
+                                                                                "type": "null"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "max",
+                                                                    "busy",
+                                                                    "mergingIssueId"
+                                                                ]
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "refine",
+                                                            "implement",
+                                                            "review",
+                                                            "merge"
+                                                        ]
+                                                    },
+                                                    "flags": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "autoDispatchIssues": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "autoMergeIssues": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "orchestratorEnabled": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "autoDispatchIssues",
+                                                            "autoMergeIssues",
+                                                            "orchestratorEnabled"
+                                                        ]
+                                                    },
+                                                    "issues": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "issueId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "identifier": {
+                                                                    "type": "string"
+                                                                },
+                                                                "title": {
+                                                                    "type": "string"
+                                                                },
+                                                                "stateName": {
+                                                                    "type": "string"
+                                                                },
+                                                                "phase": {
+                                                                    "type": "string",
+                                                                    "enum": [
+                                                                        "refine",
+                                                                        "implement",
+                                                                        "review",
+                                                                        "merge",
+                                                                        "blocked"
+                                                                    ]
+                                                                },
+                                                                "status": {
+                                                                    "type": "string",
+                                                                    "enum": [
+                                                                        "ready",
+                                                                        "waiting_capacity",
+                                                                        "blocked_by_rule",
+                                                                        "estimating",
+                                                                        "waiting_human"
+                                                                    ]
+                                                                },
+                                                                "reasons": {
+                                                                    "type": "array",
+                                                                    "items": {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                            "code": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "detail": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "label": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "deps": {
+                                                                                "type": "array",
+                                                                                "items": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "issueId": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "identifier": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "stateName": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "required": [
+                                                                                        "issueId",
+                                                                                        "identifier",
+                                                                                        "stateName"
+                                                                                    ]
+                                                                                }
+                                                                            },
+                                                                            "collidingIssueIds": {
+                                                                                "type": "array",
+                                                                                "items": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "collisions": {
+                                                                                "type": "array",
+                                                                                "items": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "issueId": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "identifier": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "stateName": {
+                                                                                            "anyOf": [
+                                                                                                {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                {
+                                                                                                    "type": "null"
+                                                                                                }
+                                                                                            ]
+                                                                                        },
+                                                                                        "overlappingEntries": {
+                                                                                            "type": "array",
+                                                                                            "items": {
+                                                                                                "type": "object",
+                                                                                                "properties": {
+                                                                                                    "ours": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "theirs": {
+                                                                                                        "type": "string"
+                                                                                                    }
+                                                                                                },
+                                                                                                "required": [
+                                                                                                    "ours",
+                                                                                                    "theirs"
+                                                                                                ]
+                                                                                            }
+                                                                                        }
+                                                                                    },
+                                                                                    "required": [
+                                                                                        "issueId",
+                                                                                        "identifier",
+                                                                                        "stateName",
+                                                                                        "overlappingEntries"
+                                                                                    ]
+                                                                                }
+                                                                            },
+                                                                            "attempts": {
+                                                                                "type": "number"
+                                                                            },
+                                                                            "maxAttempts": {
+                                                                                "type": "number"
+                                                                            },
+                                                                            "mergingIssueId": {
+                                                                                "anyOf": [
+                                                                                    {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    {
+                                                                                        "type": "null"
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "mergingIssueIdentifier": {
+                                                                                "anyOf": [
+                                                                                    {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    {
+                                                                                        "type": "null"
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "prOwner": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "code",
+                                                                            "detail"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "tier": {
+                                                                    "anyOf": [
+                                                                        {
+                                                                            "type": "string",
+                                                                            "enum": [
+                                                                                "reopened",
+                                                                                "planned"
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "type": "null"
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "attempts": {
+                                                                    "type": "number"
+                                                                },
+                                                                "maxAttempts": {
+                                                                    "type": "number"
+                                                                },
+                                                                "hasFootprint": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "hasLock": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "blockedComment": {
+                                                                    "anyOf": [
+                                                                        {
+                                                                            "type": "string"
+                                                                        },
+                                                                        {
+                                                                            "type": "null"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "issueId",
+                                                                "identifier",
+                                                                "title",
+                                                                "stateName",
+                                                                "phase",
+                                                                "status",
+                                                                "reasons",
+                                                                "tier",
+                                                                "attempts",
+                                                                "maxAttempts",
+                                                                "hasFootprint",
+                                                                "hasLock",
+                                                                "blockedComment"
+                                                            ]
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "updatedAt",
+                                                    "connectionId",
+                                                    "connectionName",
+                                                    "organizationId",
+                                                    "organizationKey",
+                                                    "capacity",
+                                                    "flags",
+                                                    "issues"
+                                                ]
+                                            }
+                                        },
+                                        "missingConnectionIds": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "ttlSeconds",
+                                        "snapshots",
+                                        "missingConnectionIds"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "connectionId",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        }
                     }
                 ]
             }

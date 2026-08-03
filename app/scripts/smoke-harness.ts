@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
-// Smoke test por harness real (§9.2) — roda CONTRA a dashboard já em execução
-// (bun run dev) e uma issue de sandbox (ver ../sandbox/README.md). Não é um
-// teste de CI: precisa do harness instalado/logado, credenciais reais do
-// Linear/GitHub, e produz efeitos reais no repo de sandbox.
+// Real-harness smoke test — runs AGAINST the dashboard already running
+// (bun run dev) and a sandbox issue (see ../sandbox/README.md). Not a CI
+// test: it needs the harness installed/logged in, real Linear/GitHub
+// credentials, and it produces real effects in the sandbox repo.
 //
-// Uso:
+// Usage:
 //   SMOKE_HARNESS=goose SMOKE_ISSUE=SANDBOX-1 \
 //   DASHBOARD_URL=http://localhost:4791 DASHBOARD_USER=admin DASHBOARD_PASSWORD=... \
 //   bun scripts/smoke-harness.ts
@@ -18,7 +18,7 @@ const PASSWORD = process.env.DASHBOARD_PASSWORD;
 
 if (!HARNESS || !ISSUE || !USER || !PASSWORD) {
   console.error(
-    "uso: SMOKE_HARNESS=<id> SMOKE_ISSUE=<identifier> DASHBOARD_USER=... DASHBOARD_PASSWORD=... bun scripts/smoke-harness.ts"
+    "usage: SMOKE_HARNESS=<id> SMOKE_ISSUE=<identifier> DASHBOARD_USER=... DASHBOARD_PASSWORD=... bun scripts/smoke-harness.ts"
   );
   process.exit(1);
 }
@@ -43,30 +43,30 @@ function step(label: string): void {
 async function main(): Promise<void> {
   step(`login (${USER})`);
   await api("/api/auth/login", { method: "POST", body: JSON.stringify({ username: USER, password: PASSWORD }) });
-  console.log("  ✓ autenticado");
+  console.log("  ✓ authenticated");
 
   step(`detect (${HARNESS})`);
   const { detection } = await api<{ detection: { installed: boolean; authStatus: string; version?: string } }>(
     `/api/harness/${HARNESS}/redetect`,
     { method: "POST" }
   );
-  console.log(`  instalado=${detection.installed} auth=${detection.authStatus} versão=${detection.version ?? "?"}`);
-  if (!detection.installed) throw new Error(`${HARNESS} não está instalado nesta máquina`);
+  console.log(`  installed=${detection.installed} auth=${detection.authStatus} version=${detection.version ?? "?"}`);
+  if (!detection.installed) throw new Error(`${HARNESS} is not installed on this machine`);
 
-  step(`dispatch manual (${ISSUE})`);
+  step(`manual dispatch (${ISSUE})`);
   const dispatch = await api<{ dispatched: boolean; reason?: string }>(`/api/dispatch/${encodeURIComponent(ISSUE!)}`, {
     method: "POST",
   });
-  if (!dispatch.dispatched) throw new Error(`dispatch não elegível: ${dispatch.reason}`);
-  console.log("  ✓ despachado — acompanhe o run na tela Ao vivo/Histórico da dashboard");
+  if (!dispatch.dispatched) throw new Error(`dispatch not eligible: ${dispatch.reason}`);
+  console.log("  ✓ dispatched — follow the run on the dashboard's Live/History screen");
 
   console.log(
-    "\nPróximos passos manuais (ver ../sandbox/README.md): confirmar footprint/PR/merge no ciclo completo, " +
-      "e testar 'Encerrar' num segundo run pra validar kill/reclaim."
+    "\nManual next steps (see ../sandbox/README.md): confirm footprint/PR/merge through the full cycle, " +
+      "and test 'Stop' on a second run to validate kill/reclaim."
   );
 }
 
 main().catch((e) => {
-  console.error(`\n✗ smoke test falhou: ${e instanceof Error ? e.message : String(e)}`);
+  console.error(`\n✗ smoke test failed: ${e instanceof Error ? e.message : String(e)}`);
   process.exit(1);
 });

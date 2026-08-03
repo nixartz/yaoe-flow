@@ -69,7 +69,7 @@ export function isolatedCursorHome(input: AcpSpawnContext, env: Record<string, s
     } catch (e) {
       log.agent.warn(
         { harness: "cursor", runId: input.runId, ...errFields(e) },
-        "não foi possível montar CURSOR_CONFIG_DIR pra atribuição — seguindo sem override"
+        "could not build CURSOR_CONFIG_DIR for attribution — continuing without an override"
       );
       return { env };
     }
@@ -114,7 +114,7 @@ export function isolatedCursorHome(input: AcpSpawnContext, env: Record<string, s
     // esconderia a causa — segue com o HOME real e deixa o erro aparecer.
     log.agent.warn(
       { harness: "cursor", runId: input.runId, homeDir, ...errFields(e) },
-      "não foi possível montar o HOME isolado do run — seguindo com o HOME real (MCPs da máquina podem estourar o limite de tools)"
+      "could not build the run's isolated HOME — continuing with the real HOME (the machine's MCPs may hit the tool limit)"
     );
     return { env };
   }

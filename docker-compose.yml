@@ -1,5 +1,5 @@
-# docker-compose de referência: Valkey + serviço de orquestração (+ dashboard).
-# O Hermes é o seu deployment existente — abaixo fica como referência de conexão.
+# Reference docker-compose: Valkey + orchestration service (+ dashboard).
+# Hermes is your existing deployment — below is a connection reference.
 services:
   valkey:
     image: valkey/valkey:8
@@ -10,12 +10,12 @@ services:
       - valkey-data:/data
 
   yaoe-flow:
-    # AGENT_BACKEND=hermes → imagem leve (só o orchestrator + dashboard):
+    # AGENT_BACKEND=hermes → light image (just the orchestrator + dashboard):
     build:
       context: .
       dockerfile: app/Dockerfile
-    # AGENT_BACKEND=goose → imagem com o goose embutido (orchestrator + goose +
-    # recipes + dashboard). Troque o bloco `build` acima por este:
+    # AGENT_BACKEND=goose → image with goose embedded (orchestrator + goose +
+    # recipes + dashboard). Swap the `build` block above for this one:
     #   build:
     #     context: .
     #     dockerfile: Dockerfile.goose
@@ -23,41 +23,42 @@ services:
     env_file:
       - ./app/.env
     environment:
-      # HOST=0.0.0.0 força bind em todas as interfaces mesmo que o .env local
-      # tenha HOST=localhost (default pensado p/ dev fora do Docker) — sem
-      # isso o `ports:` abaixo não alcança o processo dentro do container.
+      # HOST=0.0.0.0 forces binding on every interface even if the local .env
+      # has HOST=localhost (the default meant for dev outside Docker) —
+      # without this, the `ports:` below cannot reach the process inside the
+      # container.
       - HOST=0.0.0.0
       - DASHBOARD_DB_PATH=/app/data/dashboard.sqlite
     ports:
       - "4790:4790" # service API
-      - "4791:4791" # dashboard de observabilidade (SPA + API/SSE)
+      - "4791:4791" # observability dashboard (SPA + API/SSE)
     volumes:
       - dashboard-data:/app/data
     depends_on:
       - valkey
-    # Garanta que VALKEY_URL no .env aponte p/ o serviço: redis://valkey:6379
+    # Make sure VALKEY_URL in .env points at the service: redis://valkey:6379
 
-  # Hermes já roda no seu ambiente. Para o serviço alcançá-lo na mesma rede,
-  # ajuste HERMES_BASE_URL no .env (ex.: http://hermes:3000) e coloque os dois
-  # na mesma docker network. Referência:
+  # Hermes already runs in your environment. For the service to reach it on
+  # the same network, set HERMES_BASE_URL in .env (e.g. http://hermes:3000)
+  # and put both on the same docker network. Reference:
   #
   # hermes:
-  #   image: seu-hermes:latest
+  #   image: your-hermes:latest
   #   restart: unless-stopped
   #   environment:
   #     - OPENROUTER_API_KEY=...
-  #     # MCPs (Linear, GitHub), SOULs e endpoints conforme docs/hermes-setup.md
+  #     # MCPs (Linear, GitHub), SOULs and endpoints per docs/harnesses.md
 
-  # Hindsight (memória de agente — recall/retain via MCP, ver docs/goose-setup.md
-  # §Hindsight). Lembrete: a extension em si só entra no recipe com
-  # RECIPE_HINDSIGHT_ENABLED=true no build (`bun recipes/build.ts`) — desligado
-  # por padrão, então subir este container sozinho não ativa nada nos agents.
-  # OPCIONAL: só descomente se você quiser HOSPEDAR o Hindsight aqui. Se já roda
-  # um Hindsight em outro lugar (próprio ou de outro time), NÃO descomente — só
-  # preencha HINDSIGHT_API_KEY no app/.env e RECIPE_HINDSIGHT_BASE_URL/
-  # RECIPE_HINDSIGHT_BANK_ID no shell antes do build, apontando pra ele. O ponto
-  # de integração real são essas env vars, não este serviço local (ver
-  # app/.env.example).
+  # Hindsight (agent memory — recall/retain via MCP, see docs/harnesses.md).
+  # Reminder: the extension itself only enters the recipe with
+  # RECIPE_HINDSIGHT_ENABLED=true at build time (`bun recipes/build.ts`) —
+  # off by default, so starting this container alone does not activate
+  # anything in the agents. OPTIONAL: only uncomment if you want to HOST
+  # Hindsight here. If you already run a Hindsight elsewhere (your own or
+  # another team's), do NOT uncomment this — just fill in HINDSIGHT_API_KEY
+  # in app/.env and RECIPE_HINDSIGHT_BASE_URL/RECIPE_HINDSIGHT_BANK_ID in the
+  # shell before building, pointing at it. The real integration point is
+  # those env vars, not this local service (see app/.env.example).
   #
   # hindsight:
   #   image: ghcr.io/vectorize-io/hindsight:latest
@@ -65,15 +66,15 @@ services:
   #   env_file:
   #     - ./hindsight.env  # HINDSIGHT_API_LLM_PROVIDER / HINDSIGHT_API_LLM_API_KEY
   #   environment:
-  #     - HINDSIGHT_API_WORKER_ID=hindsight-orchestrator  # fixo — sobrevive a restart do container
+  #     - HINDSIGHT_API_WORKER_ID=hindsight-orchestrator  # fixed — survives container restarts
   #   ports:
-  #     - "8888:8888"  # API + MCP (streamable_http, consumido pelos recipes)
+  #     - "8888:8888"  # API + MCP (streamable_http, consumed by recipes)
   #     - "9999:9999"  # Control Plane (Web UI)
   #   volumes:
-  #     - hindsight-data:/home/hindsight/.pg0  # Postgres embutido (pg0) — troque por
-  #       # HINDSIGHT_API_DATABASE_URL apontando pra um Postgres externo em produção
+  #     - hindsight-data:/home/hindsight/.pg0  # embedded Postgres (pg0) — replace with
+  #       # HINDSIGHT_API_DATABASE_URL pointing at an external Postgres in production
 
 volumes:
   valkey-data:
   dashboard-data:
-  # hindsight-data:  # descomente junto com o serviço `hindsight` acima
+  # hindsight-data:  # uncomment along with the `hindsight` service above

@@ -1,18 +1,19 @@
 #!/usr/bin/env bun
 // ─────────────────────────────────────────────────────────────────────────────
-// Gera os recipes do Goose a partir das SOULs (fonte única da verdade).
+// Generates the Goose recipes from the SOULs (single source of truth).
 //
 //   agents/<role>.SOUL.md  +  agents/COMMUNICATION_PROTOCOL.md
 //        └────────────────────────┬───────────────────────────┘
-//                       instructions: |  (do recipe)
+//                       instructions: |  (in the recipe)
 //
-// Cada papel do pipeline vira um recipe `<role>.yaml` neste diretório, com a SOUL
-// (+ protocolo) embutida no campo `instructions`. Edite as SOULs em agents/ e
-// rode `bun recipes/build.ts` para regenerar — NUNCA edite os .yaml à mão.
+// Each pipeline role becomes a `<role>.yaml` recipe in this directory, with
+// the SOUL (+ protocol) embedded in the `instructions` field. Edit the SOULs
+// in agents/ and run `bun recipes/build.ts` to regenerate — NEVER hand-edit
+// the .yaml files.
 //
-// O input da task (issueId / mode) NÃO é parâmetro do recipe: chega na mensagem
-// do prompt (ACP), exatamente como a SOUL já espera (igual ao backend Hermes).
-// Assim os dois backends ficam simétricos.
+// The task input (issueId / mode) is NOT a recipe parameter: it arrives in
+// the prompt message (ACP), exactly as the SOUL already expects (same as the
+// Hermes backend). This keeps both backends symmetric.
 // ─────────────────────────────────────────────────────────────────────────────
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -27,20 +28,21 @@ type RecipeDef = {
   title: string;
   description: string;
   prompt: string;
-  /** Prefixo de env do papel (PMO/WORKER/REVIEWER/ORCHESTRATOR) p/ resolver o model. */
+  /** Role's env prefix (PMO/DEV/REVIEWER/ORCHESTRATOR) to resolve the model. */
   role: string;
-  /** YAML literal do bloco `extensions:` (já indentado sob a chave). */
+  /** Literal YAML of the `extensions:` block (already indented under the key). */
   extensions: string;
 };
 
-// Provider/model dos recipes — configuráveis na geração via env (a CHAVE do
-// provider NÃO vai no recipe; vem do ambiente do goose, ex.: OPENROUTER_API_KEY):
+// Recipe provider/model — configurable at generation time via env (the
+// provider's KEY does NOT go in the recipe; it comes from goose's own
+// environment, e.g. OPENROUTER_API_KEY):
 //   RECIPE_PROVIDER          (default: openrouter)
-//   RECIPE_MODEL             (default global)
-//   RECIPE_<PAPEL>_MODEL     (override por papel)
+//   RECIPE_MODEL             (global default)
+//   RECIPE_<ROLE>_MODEL      (per-role override)
 const PROVIDER = process.env.RECIPE_PROVIDER ?? "openrouter";
-// Defaults: presets OpenRouter (ver docs/openrouter-presets.md). Override por
-// RECIPE_<PAPEL>_MODEL / RECIPE_ANALYSIS_MODEL / RECIPE_MODEL.
+// Defaults: OpenRouter presets (see docs/harnesses.md). Override via
+// RECIPE_<ROLE>_MODEL / RECIPE_ANALYSIS_MODEL / RECIPE_MODEL.
 const MODEL_CODER = process.env.RECIPE_MODEL ?? "@preset/coder";
 const MODEL_ANALYSIS = process.env.RECIPE_ANALYSIS_MODEL ?? "@preset/analysis";
 const modelFor = (role: string) => {
@@ -50,9 +52,10 @@ const modelFor = (role: string) => {
   return MODEL_CODER;
 };
 
-// Snippets de extensions reutilizados pelos recipes. Os segredos entram via
-// `env_keys` (só o NOME): o Goose resolve o valor do keyring/ambiente do goose
-// e injeta no processo do MCP — o valor nunca fica no YAML. Ver docs/goose-setup.md §2.
+// Extension snippets reused across recipes. Secrets enter via `env_keys`
+// (NAME only): Goose resolves the value from its own keyring/environment and
+// injects it into the MCP process — the value never lives in the YAML. See
+// docs/mcp-configuration.md.
 const EXT_LINEAR = [
   "  # Linear MCP — credential: LINEAR_API_TOKEN (the backend aliases it from LINEAR_API_KEY).",
   "  - type: stdio",
@@ -62,13 +65,14 @@ const EXT_LINEAR = [
   "    timeout: 300",
   '    env_keys: ["LINEAR_API_TOKEN"]',
 ];
-// GitHub MCP oficial (github/github-mcp-server). Toolsets enxutos por papel —
-// menos schemas no prompt = menos tokens/custo por turno. Ver GITHUB_TOOLSETS
-// no README do github-mcp-server. Na imagem Dockerfile.goose o binário vem
-// pré-instalado; localmente: release ou Docker — docs/*-setup.md.
+// Official GitHub MCP (github/github-mcp-server). Lean toolsets per role —
+// fewer schemas in the prompt = fewer tokens/cost per turn. See
+// GITHUB_TOOLSETS in the github-mcp-server README. The Dockerfile.goose image
+// ships the binary pre-installed; locally: release download or Docker — see
+// docs/harnesses.md.
 function extGithub(opts: { toolsets: string; readOnly?: boolean }): string[] {
   const lines = [
-    "  # GitHub MCP oficial (github/github-mcp-server) — credential:",
+    "  # Official GitHub MCP (github/github-mcp-server) — credential:",
     "  # GITHUB_PERSONAL_ACCESS_TOKEN (the backend aliases it from GITHUB_TOKEN).",
     `  # Toolsets: ${opts.toolsets}${opts.readOnly ? " · READ_ONLY=1" : ""}`,
     "  - type: stdio",
@@ -91,29 +95,30 @@ const extDeveloper = (note: string) => [
   "    name: developer",
 ];
 
-// Hindsight — memória de agente (recall/retain), MCP remoto via streamable_http
-// (não stdio: não é um binário spawnável, é um servidor HTTP já rodando —
-// local via docker-compose ou um Hindsight existente em outro lugar). A URL
-// (host + bank) é BAKEADA aqui em build-time a partir de RECIPE_HINDSIGHT_*
-// (mesmo padrão de RECIPE_PROVIDER/RECIPE_MODEL) — mudar host/bank exige
-// rodar `bun recipes/build.ts` de novo. Só a CREDENCIAL (header Authorization)
-// é resolvida em runtime pelo próprio goose a partir do seu process.env
-// (${HINDSIGHT_API_KEY}), igual ao segredo dos MCPs stdio via env_keys — nunca
-// fica escrita aqui. Ver docs/goose-setup.md §Hindsight.
-// Opt-in explícito (RECIPE_HINDSIGHT_ENABLED=true), default DESLIGADO. Não é só
-// preferência: se a extension apontar pra um Hindsight inalcançável/mal configurado,
-// não há garantia de que o goose degrade graciosamente (extensions quebradas já
-// derrubaram outras no mesmo processo em algumas versões do goose) — então quem
-// não configurou Hindsight não deve ter NENHUM risco novo. Sem a flag, EXT_HINDSIGHT
-// fica vazio e a extension nem aparece no .yaml gerado.
+// Hindsight — agent memory (recall/retain), remote MCP via streamable_http
+// (not stdio: it is not a spawnable binary, it is an HTTP server already
+// running — locally via docker-compose, or an existing Hindsight elsewhere).
+// The URL (host + bank) is BAKED IN here at build time from RECIPE_HINDSIGHT_*
+// (same pattern as RECIPE_PROVIDER/RECIPE_MODEL) — changing host/bank
+// requires running `bun recipes/build.ts` again. Only the CREDENTIAL
+// (Authorization header) is resolved at runtime by goose itself from its own
+// process.env (${HINDSIGHT_API_KEY}), same as stdio MCP secrets via
+// env_keys — it is never written here. See docs/mcp-configuration.md.
+// Explicit opt-in (RECIPE_HINDSIGHT_ENABLED=true), OFF by default. Not just a
+// preference: if the extension points at an unreachable/misconfigured
+// Hindsight, there is no guarantee goose degrades gracefully (broken
+// extensions have taken down others in the same process on some goose
+// versions) — so anyone who has not configured Hindsight should carry ZERO
+// new risk. Without the flag, EXT_HINDSIGHT is empty and the extension does
+// not even appear in the generated .yaml.
 const HINDSIGHT_ENABLED = process.env.RECIPE_HINDSIGHT_ENABLED === "true";
 const HINDSIGHT_BASE_URL = process.env.RECIPE_HINDSIGHT_BASE_URL ?? "http://hindsight:8888";
 const HINDSIGHT_BANK_ID = process.env.RECIPE_HINDSIGHT_BANK_ID ?? "orchestrator";
 const EXT_HINDSIGHT = HINDSIGHT_ENABLED
   ? [
-      "  # Hindsight MCP — memória de agente (recall/retain). Credencial via header",
-      "  # (resolvida pelo goose em runtime a partir do seu próprio ambiente), não",
-      "  # env_keys — essa extension é remota (streamable_http), não um MCP stdio.",
+      "  # Hindsight MCP — agent memory (recall/retain). Credential via header",
+      "  # (resolved by goose at runtime from its own environment), not",
+      "  # env_keys — this extension is remote (streamable_http), not a stdio MCP.",
       "  - type: streamable_http",
       "    name: hindsight",
       `    uri: "${HINDSIGHT_BASE_URL}/mcp/${HINDSIGHT_BANK_ID}/"`,
@@ -180,8 +185,8 @@ const RECIPES: RecipeDef[] = [
   },
 ];
 
-// Indenta cada linha por 2 espaços para caber num bloco literal YAML (`|`).
-// Linhas vazias ficam vazias (válido e legível dentro do bloco).
+// Indents every line by 2 spaces to fit a YAML literal block (`|`).
+// Empty lines stay empty (valid and readable inside the block).
 function indentBlock(text: string): string {
   return text
     .split("\n")
@@ -189,7 +194,7 @@ function indentBlock(text: string): string {
     .join("\n");
 }
 
-// Escapa string para YAML de aspas duplas (usado em title/description/prompt).
+// Escapes a string for double-quoted YAML (used in title/description/prompt).
 function yamlDq(s: string): string {
   return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
@@ -219,23 +224,24 @@ for (const def of RECIPES) {
   const yaml = buildRecipe(def);
   const out = join(RECIPES_DIR, def.file);
   writeFileSync(out, yaml, "utf8");
-  // Validação: se esta build do Bun tiver YAML, garante que o recipe parseia e
-  // que `instructions` é uma string não-vazia (o bloco literal saiu correto).
+  // Validation: if this Bun build has YAML support, confirm the recipe
+  // parses and that `instructions` is a non-empty string (the literal block
+  // came out correctly).
   const Y = (Bun as unknown as { YAML?: { parse(s: string): unknown } }).YAML;
   if (Y) {
     const parsed = Y.parse(yaml) as { instructions?: unknown; extensions?: unknown };
     if (typeof parsed.instructions !== "string" || !parsed.instructions.length) {
-      throw new Error(`${def.file}: instructions inválido após parse`);
+      throw new Error(`${def.file}: invalid instructions after parsing`);
     }
     if (!Array.isArray(parsed.extensions)) {
-      throw new Error(`${def.file}: extensions inválido após parse`);
+      throw new Error(`${def.file}: invalid extensions after parsing`);
     }
   }
   console.log(`✓ ${def.file}  (${yaml.length} bytes)`);
   wrote++;
 }
-console.log(`\n${wrote} recipe(s) gerado(s) em ${RECIPES_DIR}${Y0()}`);
+console.log(`\n${wrote} recipe(s) generated in ${RECIPES_DIR}${Y0()}`);
 function Y0() {
   const Y = (Bun as unknown as { YAML?: unknown }).YAML;
-  return Y ? "  · YAML validado" : "  · (Bun.YAML indisponível — validação de parse pulada)";
+  return Y ? "  · YAML validated" : "  · (Bun.YAML unavailable — parse validation skipped)";
 }

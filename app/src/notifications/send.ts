@@ -79,7 +79,7 @@ export async function deliver(channel: ChannelRow, config: Record<string, unknow
       if (attempt === MAX_RETRIES) {
         log.dashboard.warn(
           { channel: channel.name, type: channel.type, attempt, ...errFields(e) },
-          "notification delivery failed (best-effort — pipeline não afetado)"
+          "notification delivery failed (best-effort — pipeline unaffected)"
         );
         return false;
       }

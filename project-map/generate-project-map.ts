@@ -1,14 +1,14 @@
 #!/usr/bin/env bun
 // generate-project-map.ts
-// Varre um repositório e gera PROJECT_MAP.md — o inventário vivo que os agents
-// leem ANTES de implementar (read-before-write) e usam no planning pass do
-// Orquestrador. Roda em repos Node/Bun.
+// Scans a repository and generates PROJECT_MAP.md — the live inventory
+// agents read BEFORE implementing (read-before-write) and use in the
+// Orchestrator's planning pass. Runs on Node/Bun repos.
 //
-// Uso:
+// Usage:
 //   bun generate-project-map.ts [rootDir] [--out PROJECT_MAP.md]
 //   (default rootDir = "src")
 //
-// Ideal rodar como step de CI (a cada merge na main) para nunca ficar velho.
+// Best run as a CI step (on every merge to main) so it never goes stale.
 
 import { readdirSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, extname } from "node:path";
@@ -33,7 +33,7 @@ function walk(dir: string, acc: string[] = []): string[] {
   try {
     names = readdirSync(dir);
   } catch {
-    return acc; // dir não existe
+    return acc; // dir does not exist
   }
   for (const name of names) {
     if (IGNORE_DIR.has(name)) continue;
@@ -73,14 +73,14 @@ function extractExports(src: string): string[] {
 
 function categorize(path: string): string {
   const p = path.toLowerCase().replace(/\\/g, "/");
-  if (/(^|\/)(app|pages|routes)\//.test(p)) return "Páginas / Rotas";
+  if (/(^|\/)(app|pages|routes)\//.test(p)) return "Pages / Routes";
   if (/\.service\./.test(p) || /(^|\/)services\//.test(p)) return "Services";
   if (/(^|\/)api\//.test(p) || /\.route\./.test(p)) return "API / Endpoints";
   if (/(^|\/)hooks\//.test(p) || /\/use[a-z0-9_]+\.(t|j)sx?$/.test(p)) return "Hooks";
-  if (/(^|\/)(components|ui)\//.test(p) || extname(path) === ".tsx") return "Componentes";
+  if (/(^|\/)(components|ui)\//.test(p) || extname(path) === ".tsx") return "Components";
   if (/(^|\/)(lib|utils|helpers)\//.test(p)) return "Lib / Utils";
-  if (/(^|\/)(types|models|schema|schemas)\//.test(p)) return "Tipos / Models";
-  return "Outros";
+  if (/(^|\/)(types|models|schema|schemas)\//.test(p)) return "Types / Models";
+  return "Other";
 }
 
 // ── main ──
@@ -94,18 +94,18 @@ for (const f of files) {
 }
 
 const order = [
-  "Páginas / Rotas", "Componentes", "Hooks", "Services",
-  "API / Endpoints", "Lib / Utils", "Tipos / Models", "Outros",
+  "Pages / Routes", "Components", "Hooks", "Services",
+  "API / Endpoints", "Lib / Utils", "Types / Models", "Other",
 ];
 const cats = [...byCat.keys()].sort(
   (a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)
 );
 
 let md = `# PROJECT_MAP\n\n`;
-md += `> Inventário auto-gerado — NÃO edite à mão; rode o gerador.\n`;
-md += `> Gerado em ${new Date().toISOString()} · raiz \`${root}\` · ${files.length} arquivos.\n\n`;
-md += `Os agents leem este arquivo antes de implementar (read-before-write) e no `;
-md += `planning pass. Use-o para descobrir o que JÁ existe antes de criar algo novo.\n\n`;
+md += `> Auto-generated inventory — do NOT hand-edit; run the generator.\n`;
+md += `> Generated at ${new Date().toISOString()} · root \`${root}\` · ${files.length} files.\n\n`;
+md += `Agents read this file before implementing (read-before-write) and during the `;
+md += `planning pass. Use it to discover what ALREADY exists before creating something new.\n\n`;
 
 for (const cat of cats) {
   const entries = byCat.get(cat)!.sort((a, b) => a.path.localeCompare(b.path));
@@ -118,4 +118,4 @@ for (const cat of cats) {
 }
 
 writeFileSync(outFile, md);
-console.log(`PROJECT_MAP gerado: ${outFile} (${files.length} arquivos, ${cats.length} categorias)`);
+console.log(`PROJECT_MAP generated: ${outFile} (${files.length} files, ${cats.length} categories)`);

@@ -14,7 +14,7 @@ webhooksRoutes.get(
   "/webhooks",
   describeRoute({
     tags: ["Webhooks"],
-    summary: "Lista webhook events com filtros e paginação",
+    summary: "List webhook events with filters and pagination",
     responses: { 200: jsonContent(looseObject, "Webhooks") },
   }),
   validator("query", webhooksQuery),
@@ -37,7 +37,7 @@ webhooksRoutes.get(
   "/webhooks/stream",
   describeRoute({
     tags: ["Webhooks"],
-    summary: "SSE de webhook events",
+    summary: "SSE stream of webhook events",
     responses: { 200: sseContent },
   }),
   (c) =>
@@ -55,7 +55,7 @@ webhooksRoutes.get(
   "/webhooks/:id",
   describeRoute({
     tags: ["Webhooks"],
-    summary: "Detalhe de um webhook event",
+    summary: "Webhook event detail",
     responses: {
       200: jsonContent(looseObject, "Webhook encontrado"),
       404: jsonContent(errorBody, "Não encontrado"),

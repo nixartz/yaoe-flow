@@ -491,10 +491,10 @@ export async function maybeSeedDefaultConnection(): Promise<void> {
     });
     log.linear.info(
       { organizationId: json.data.organization.id, organizationKey: json.data.organization.urlKey },
-      "connection Default criada a partir de LINEAR_* legado"
+      "Default connection created from legacy LINEAR_*"
     );
   } catch (e) {
-    log.linear.warn({ ...errFields(e) }, "seed Default connection falhou (não-fatal)");
+    log.linear.warn({ ...errFields(e) }, "Default connection seed failed (non-fatal)");
   }
 }
 

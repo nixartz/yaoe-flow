@@ -27,7 +27,7 @@ agentsRoutes.get(
   "/",
   describeRoute({
     tags: ["Agents"],
-    summary: "Lista agentes e roles",
+    summary: "List agents and roles",
     responses: { 200: jsonContent(looseObject, "Agentes") },
   }),
   (c) => c.json({ agents: agentsRepo.listAgents(), roles: AGENT_ROLES })
@@ -37,7 +37,7 @@ agentsRoutes.get(
   "/:id",
   describeRoute({
     tags: ["Agents"],
-    summary: "Detalhe do agente",
+    summary: "Agent detail",
     responses: {
       200: jsonContent(looseObject, "Agente encontrado"),
       404: jsonContent(errorBody, "Não encontrado"),
@@ -61,7 +61,7 @@ agentsRoutes.post(
   "/",
   describeRoute({
     tags: ["Agents"],
-    summary: "Cria agente",
+    summary: "Create agent",
     responses: {
       200: jsonContent(okBody.extend({ agent: looseObject }), "Agente criado"),
       400: jsonContent(errorBody, "Erro de validação"),
@@ -94,7 +94,7 @@ agentsRoutes.patch(
   "/:id",
   describeRoute({
     tags: ["Agents"],
-    summary: "Atualiza metadados do agente",
+    summary: "Update the agent's metadata",
     responses: {
       200: jsonContent(okBody.extend({ agent: looseObject }), "Atualizado"),
       400: jsonContent(errorBody, "Erro"),
@@ -122,7 +122,7 @@ agentsRoutes.post(
   "/:id/activate",
   describeRoute({
     tags: ["Agents"],
-    summary: "Ativa agente (troca atômica da variante do papel)",
+    summary: "Activate agent (atomic swap of the role's variant)",
     responses: {
       200: jsonContent(okBody.extend({ agent: looseObject }), "Ativado"),
       400: jsonContent(errorBody, "Erro"),
@@ -146,7 +146,7 @@ agentsRoutes.post(
   "/:id/deactivate",
   describeRoute({
     tags: ["Agents"],
-    summary: "Desativa agente",
+    summary: "Deactivate agent",
     responses: {
       200: jsonContent(okBody.extend({ agent: looseObject }), "Desativado"),
       400: jsonContent(errorBody, "Erro"),
@@ -169,7 +169,7 @@ agentsRoutes.get(
   "/:id/versions",
   describeRoute({
     tags: ["Agents"],
-    summary: "Lista versões da SOUL",
+    summary: "List SOUL versions",
     responses: { 200: jsonContent(looseObject, "Versões") },
   }),
   validator("param", idParam),
@@ -180,7 +180,7 @@ agentsRoutes.post(
   "/:id/versions",
   describeRoute({
     tags: ["Agents"],
-    summary: "Cria versão da SOUL (append-only)",
+    summary: "Create a SOUL version (append-only)",
     responses: {
       200: jsonContent(looseObject, "Versão criada"),
       400: jsonContent(errorBody, "Erro"),
@@ -212,7 +212,7 @@ agentsRoutes.get(
   "/:id/versions/:versionId",
   describeRoute({
     tags: ["Agents"],
-    summary: "Detalhe de uma versão",
+    summary: "Version detail",
     responses: {
       200: jsonContent(looseObject, "Versão"),
       404: jsonContent(errorBody, "Não encontrada"),
@@ -229,7 +229,7 @@ agentsRoutes.post(
   "/:id/versions/:versionId/activate",
   describeRoute({
     tags: ["Agents"],
-    summary: "Ativa uma versão específica",
+    summary: "Activate a specific version",
     responses: {
       200: jsonContent(okBody.extend({ agent: looseObject }), "Ativada"),
       400: jsonContent(errorBody, "Erro"),
@@ -250,9 +250,9 @@ agentsRoutes.get(
   "/:id/versions/:versionId/export",
   describeRoute({
     tags: ["Agents"],
-    summary: "Exporta soulMarkdown da versão (text/markdown)",
+    summary: "Export the version's soulMarkdown (text/markdown)",
     responses: {
-      200: { description: "Markdown da SOUL", content: { "text/markdown": { schema: { type: "string" as const } } } },
+      200: { description: "SOUL markdown", content: { "text/markdown": { schema: { type: "string" as const } } } },
       404: jsonContent(errorBody, "Não encontrada"),
     },
   }),
@@ -267,7 +267,7 @@ agentsRoutes.get(
   "/:id/harness",
   describeRoute({
     tags: ["Agents"],
-    summary: "Lista configs de harness do agente",
+    summary: "List the agent's harness configs",
     responses: { 200: jsonContent(looseObject, "Configs") },
   }),
   validator("param", idParam),
@@ -278,7 +278,7 @@ agentsRoutes.put(
   "/:id/harness/:harnessId",
   describeRoute({
     tags: ["Agents"],
-    summary: "Atualiza config de harness (D3)",
+    summary: "Update a harness config",
     responses: {
       200: jsonContent(okBody.extend({ config: looseObject }), "Config atualizada"),
       400: jsonContent(errorBody, "Erro"),
@@ -305,7 +305,7 @@ agentsRoutes.delete(
   "/:id/harness/:harnessId",
   describeRoute({
     tags: ["Agents"],
-    summary: "Remove config de harness",
+    summary: "Delete a harness config",
     responses: {
       200: jsonContent(okBody, "Removida"),
       400: jsonContent(errorBody, "Erro"),
@@ -326,7 +326,7 @@ agentsRoutes.post(
   "/:id/activate-harness",
   describeRoute({
     tags: ["Agents"],
-    summary: "Troca o harness ativo do agente (D3)",
+    summary: "Switch the agent's active harness",
     responses: {
       200: jsonContent(okBody.extend({ agent: looseObject }), "Harness trocado"),
       400: jsonContent(errorBody, "Erro"),

@@ -416,7 +416,7 @@ linearConnectionsRoutes.post(
         } catch (e) {
           log.dashboard.warn(
             { connectionId: row.id, error: e instanceof Error ? e.message : String(e) },
-            "rotate: createWebhook no Linear falhou — secret só no banco"
+            "rotate: createWebhook in Linear failed — secret stored in the database only"
           );
         }
       }

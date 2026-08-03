@@ -27,7 +27,7 @@ runsRoutes.get(
   "/runs",
   describeRoute({
     tags: ["Runs"],
-    summary: "Lista runs com filtros e paginação",
+    summary: "List runs with filters and pagination",
     responses: { 200: jsonContent(looseObject, "Runs") },
   }),
   validator("query", runsQuery),
@@ -50,7 +50,7 @@ runsRoutes.get(
   "/runs/active",
   describeRoute({
     tags: ["Runs"],
-    summary: "Runs em execução",
+    summary: "Currently running runs",
     responses: { 200: jsonContent(looseObject, "Runs ativas") },
   }),
   (c) => c.json(store.activeRuns())
@@ -60,7 +60,7 @@ runsRoutes.get(
   "/runs/stream",
   describeRoute({
     tags: ["Runs"],
-    summary: "SSE de eventos de run",
+    summary: "SSE stream of run events",
     responses: { 200: sseContent },
   }),
   (c) =>
@@ -78,7 +78,7 @@ runsRoutes.get(
   "/runs/:id",
   describeRoute({
     tags: ["Runs"],
-    summary: "Detalhe de um run",
+    summary: "Run detail",
     responses: {
       200: jsonContent(looseObject, "Run encontrado"),
       404: jsonContent(errorBody, "Não encontrado"),
@@ -96,7 +96,7 @@ runsRoutes.post(
   "/runs/:id/reconcile",
   describeRoute({
     tags: ["Runs"],
-    summary: "Reconcilia custo OpenRouter de um run",
+    summary: "Reconcile a run's OpenRouter cost",
     responses: {
       200: jsonContent(looseObject, "Reconciliação"),
       404: jsonContent(errorBody, "Não encontrado"),
@@ -122,7 +122,7 @@ runsRoutes.post(
   "/dispatch/:issue",
   describeRoute({
     tags: ["Runs"],
-    summary: "Dispatch manual de issue",
+    summary: "Manual dispatch of an issue",
     responses: {
       200: jsonContent(dispatchResponse, "Dispatch OK"),
       400: jsonContent(errorBody, "Erro"),
@@ -169,7 +169,7 @@ runsRoutes.post(
   "/runs/:id/stop",
   describeRoute({
     tags: ["Runs"],
-    summary: "Encerra run manualmente",
+    summary: "Stop a run manually",
     responses: {
       200: jsonContent(okBody.extend({ warning: looseObject.optional() }), "Encerrado"),
       400: jsonContent(errorBody, "Harness sem kill"),
@@ -235,7 +235,7 @@ runsRoutes.get(
   "/runs/:id/stream",
   describeRoute({
     tags: ["Runs"],
-    summary: "SSE de eventos de um run específico",
+    summary: "SSE stream of a specific run's events",
     responses: { 200: sseContent },
   }),
   (c) => {

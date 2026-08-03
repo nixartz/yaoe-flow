@@ -1,15 +1,17 @@
-# Config GLOBAL mínima do goose para a imagem (orchestrator + goose).
-# Copiada para /root/.config/goose/config.yaml no Dockerfile.goose.
+# Minimal GLOBAL goose config for the image (orchestrator + goose). Copied to
+# /root/.config/goose/config.yaml in Dockerfile.goose.
 #
-# Objetivo: set de ferramentas ENXUTO e DETERMINÍSTICO. O goose, por padrão,
-# habilita ~16 extensions bundled (analyze, todo, tom, memory, …) → centenas de
-# tools, o que PIORA a seleção do modelo e favorece vazamento de contexto/escopo.
-# Aqui deixamos só o `developer` (shell/fs/git). Os MCPs do papel (linear/github)
-# vêm do RECIPE, não daqui — então cada agent fica com: developer + os MCPs do recipe.
+# Goal: a LEAN, DETERMINISTIC toolset. By default goose enables ~16 bundled
+# extensions (analyze, todo, tom, memory, …) → hundreds of tools, which HURTS
+# model tool-selection and encourages context/scope leakage. Here we only
+# leave `developer` on (shell/fs/git). Per-role MCPs (linear/github) come from
+# the RECIPE, not from here — so each agent ends up with: developer + the
+# recipe's MCPs.
 #
-# Obs.: é preciso listar cada extension com `enabled: false` (não basta omitir —
-# o goose re-injeta os defaults que faltarem). Provider/model vêm por env
-# (GOOSE_PROVIDER/GOOSE_MODEL + OPENROUTER_API_KEY), definidos no Dockerfile/.env.
+# Note: every extension must be listed with `enabled: false` (omitting it is
+# not enough — goose re-injects any missing defaults). Provider/model come
+# from env (GOOSE_PROVIDER/GOOSE_MODEL + OPENROUTER_API_KEY), set in the
+# Dockerfile/.env.
 extensions:
   developer:
     enabled: true

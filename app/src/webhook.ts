@@ -190,7 +190,7 @@ export function parseWebhookEnvelope(raw: string): WebhookEnvelope | null {
     return null;
   }
 
-  log.webhook.debug({ type: body.type, action: body.action, keys: Object.keys(body) }, "webhook raw envelope (validação de shape)");
+  log.webhook.debug({ type: body.type, action: body.action, keys: Object.keys(body) }, "webhook raw envelope (shape validation)");
 
   const d = body.data ?? {};
   const actor = body.actor ?? body.createdBy;

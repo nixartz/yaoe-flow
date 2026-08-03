@@ -31,7 +31,7 @@ authRoutes.get(
   "/setup-status",
   describeRoute({
     tags: ["Auth"],
-    summary: "Estado do setup (first-access)",
+    summary: "Setup state (first-access)",
     responses: { 200: jsonContent(setupStatusResponse, "Setup status") },
   }),
   (c) => c.json({ needsSetup: countUsers() === 0 })
@@ -41,7 +41,7 @@ authRoutes.post(
   "/setup",
   describeRoute({
     tags: ["Auth"],
-    summary: "Cria o primeiro admin (first-access)",
+    summary: "Create the first admin (first-access)",
     responses: {
       200: jsonContent(loginResponse, "Admin criado"),
       400: jsonContent(errorBody, "Validação falhou"),
@@ -75,7 +75,7 @@ authRoutes.post(
   "/login",
   describeRoute({
     tags: ["Auth"],
-    summary: "Login na dashboard",
+    summary: "Dashboard login",
     responses: {
       200: jsonContent(loginResponse, "Login OK"),
       401: jsonContent(errorBody, "Credenciais inválidas"),
@@ -129,7 +129,7 @@ authRoutes.post(
   "/logout",
   describeRoute({
     tags: ["Auth"],
-    summary: "Logout da dashboard",
+    summary: "Dashboard logout",
     responses: { 200: jsonContent(okBody, "Logout OK") },
   }),
   (c) => {
@@ -142,7 +142,7 @@ authRoutes.get(
   "/me",
   describeRoute({
     tags: ["Auth"],
-    summary: "Usuário da sessão atual",
+    summary: "Current session user",
     responses: { 200: jsonContent(meResponse, "Sessão atual") },
   }),
   async (c) => {

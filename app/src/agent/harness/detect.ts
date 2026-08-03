@@ -69,7 +69,7 @@ async function probeModels(id: HarnessId, detection: HarnessDetection): Promise<
   } catch (e) {
     log.server.warn(
       { harness: id, ...errFields(e) },
-      "não foi possível enumerar os modelos do harness — a dashboard fica no campo de texto livre"
+      "could not enumerate the harness's models — the dashboard falls back to a free-text field"
     );
     return detection;
   }
@@ -81,7 +81,7 @@ async function detectAndStore(id: HarnessId): Promise<HarnessDetection> {
   try {
     detection = await adapter.detect();
   } catch (e) {
-    log.server.warn({ harness: id, ...errFields(e) }, "harness detect() falhou — marcando como não instalado");
+    log.server.warn({ harness: id, ...errFields(e) }, "harness detect() failed — marking as not installed");
     detection = { installed: false, authStatus: "unknown", checkedAt: Date.now() };
   }
   detection = await probeModels(id, detection);

@@ -149,7 +149,7 @@ export function createLinearClient(scope: LinearScope) {
     }
     const stateId = stateCache[name];
     if (!stateId) {
-      throw new Error(`State não encontrado no Linear: "${name}" (confira config.states e team da connection)`);
+      throw new Error(`State not found in Linear: "${name}" (check config.states and the connection's team)`);
     }
     return stateId;
   }
@@ -374,13 +374,13 @@ export function createLinearClient(scope: LinearScope) {
       if (refreshed[name]) {
         log.linear.warn(
           { labelName: name, ...errFields(e) },
-          "issueLabelCreate falhou mas label já existia (corrida) — recuperado via refresh"
+          "issueLabelCreate failed but the label already existed (race) — recovered via refresh"
         );
         return refreshed[name];
       }
       log.linear.error(
         { labelName: name, ...errFields(e) },
-        "não foi possível criar/encontrar a label — operação de label falhará (cosmético, mas investigar)"
+        "could not create/find the label — the label operation will fail (cosmetic, but worth investigating)"
       );
       throw e;
     }

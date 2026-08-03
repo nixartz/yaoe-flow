@@ -1,6 +1,7 @@
-// Snapshot de prontidão: avalia candidatas Linear + locks Valkey SEM side-effects
-// (não move status, não comenta, não adquire lock). Rodado no fim de cada
-// reconciliação de connection no tick — a dashboard lê o cache, não o Linear.
+// Readiness snapshot: evaluates Linear candidates + Valkey locks WITHOUT side
+// effects (does not move status, comment, or acquire a lock). Runs at the end
+// of each connection reconciliation in the tick — the dashboard reads the
+// cache, not Linear.
 import { config } from "../config";
 import { log, errFields } from "../logger";
 import { linearFor } from "../linear";
@@ -175,7 +176,7 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
     for (const issue of todoAll) {
       const reasons: ReadinessReason[] = [];
       if (budgetPaused) {
-        reasons.push(reason("budget_paused", "Harness do PMO pausado por budget — issue não é movida."));
+        reasons.push(reason("budget_paused", "PMO harness paused by budget — the issue is not moved."));
       }
       if (!config.autoDispatchIssues && !todoLabeled.has(issue.id)) {
         reasons.push(
@@ -190,7 +191,7 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
         );
       }
       if (reasons.length === 0) {
-        reasons.push(reason("ready", "Pronta para refino no próximo tick com seat livre."));
+        reasons.push(reason("ready", "Ready for refinement on the next tick once a seat is free."));
       }
       issues.push({
         issueId: issue.id,
@@ -221,7 +222,7 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
       const hasFootprint = footprint !== null && footprint.length > 0;
 
       if (budgetPaused) {
-        reasons.push(reason("budget_paused", "Harness do Dev pausado por budget — issue não é movida."));
+        reasons.push(reason("budget_paused", "Dev harness paused by budget — the issue is not moved."));
       }
 
       if (tier === "planned" && !config.autoDispatchIssues && !plannedLabeled.has(issue.id)) {
@@ -237,19 +238,19 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
           reasons.push(
             reason(
               "circuit_breaker",
-              `Circuit breaker: ${attempts}/${config.reliability.maxAttempts} tentativas — no próximo pick a issue iria para Blocked.`,
+              `Circuit breaker: ${attempts}/${config.reliability.maxAttempts} attempts — on the next pick the issue would go to Blocked.`,
               { attempts, maxAttempts: config.reliability.maxAttempts }
             )
           );
         }
       } else if (hasLock && tier !== "reopened" && tier !== "planned") {
-        // planned+lock órfão é liberado no pick — não reportamos como bloqueio duro
+        // planned+orphan lock is released at pick time — not reported as a hard blocker
       } else if (hasLock && tier === "planned") {
-        // Orphan lock: tick libera; tratamos como não-bloqueante.
+        // Orphan lock: released by the tick; treated as non-blocking.
       }
 
-      // Deps / footprint só no caminho “nova implementação” (sem lock) ou Planned.
-      // Reopened com lock usa fix path — deps já foram satisfeitas antes.
+      // Deps / footprint only on the "new implementation" path (no lock) or Planned.
+      // Reopened with a lock uses the fix path — deps were already satisfied earlier.
       if (!hasLock || tier === "planned") {
         try {
           const deps = await unresolvedDeps(lin, issue.id);
@@ -257,7 +258,7 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
             reasons.push(
               reason(
                 "deps_unsatisfied",
-                `Dependências Linear não concluídas: ${deps.map((d) => `${d.identifier} (${d.stateName})`).join(", ")}.`,
+                `Unresolved Linear dependencies: ${deps.map((d) => `${d.identifier} (${d.stateName})`).join(", ")}.`,
                 { deps }
               )
             );
@@ -268,7 +269,7 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
 
         if (!hasFootprint) {
           reasons.push(
-            reason("estimating_footprint", "Footprint ainda não estimado — o próximo tick dispara o planning async.")
+            reason("estimating_footprint", "Footprint not estimated yet — the next tick triggers async planning.")
           );
         } else if (footprint) {
           const collisions = await buildCollisions(
@@ -285,7 +286,7 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
                   .join("; ");
                 const more =
                   c.overlappingEntries.length > 4
-                    ? ` (+${c.overlappingEntries.length - 4} pares)`
+                    ? ` (+${c.overlappingEntries.length - 4} more)`
                     : "";
                 return `${c.identifier}${c.stateName ? ` (${c.stateName})` : ""}${entries ? `: ${entries}${more}` : ""}`;
               })
@@ -293,7 +294,7 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
             reasons.push(
               reason(
                 "footprint_collision",
-                `Footprint colide com issue(s) que ainda têm lock ativo: ${labels}.`,
+                `Footprint collides with issue(s) that still hold an active lock: ${labels}.`,
                 {
                   collisions,
                   collidingIssueIds: collisions.map((c) => c.issueId),
@@ -318,8 +319,8 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
           reason(
             "ready",
             tier === "reopened"
-              ? "Pronta para correção (Reopened) no próximo tick com seat livre."
-              : "Pronta para implementação no próximo tick com seat livre."
+              ? "Ready for a fix (Reopened) on the next tick once a seat is free."
+              : "Ready for implementation on the next tick once a seat is free."
           )
         );
       }
@@ -352,13 +353,13 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
     for (const issue of codeReview) {
       const reasons: ReadinessReason[] = [];
       if (budgetPaused) {
-        reasons.push(reason("budget_paused", "Harness do Reviewer pausado por budget — issue não é movida."));
+        reasons.push(reason("budget_paused", "Reviewer harness paused by budget — the issue is not moved."));
       }
       try {
         const pr = await findPrReadOnly(lin, issue.id);
         if (!pr) {
           reasons.push(
-            reason("missing_pr", "PR não encontrada nos attachments nem nos comentários — o scope-check devolveria para Reopened.")
+            reason("missing_pr", "PR not found in attachments or comments — the scope-check would send it back to Reopened.")
           );
         } else if (authorizedOrgs.length > 0 && !authorizedOrgs.includes(pr.owner.toLowerCase())) {
           reasons.push(
@@ -381,7 +382,7 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
         );
       }
       if (reasons.length === 0) {
-        reasons.push(reason("ready", "Pronta para review no próximo tick com seat livre."));
+        reasons.push(reason("ready", "Ready for review on the next tick once a seat is free."));
       }
       const fp = await locks.getFootprint(ctx.connectionId, issue.id);
       issues.push({
@@ -409,11 +410,11 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
       const reasons: ReadinessReason[] = [];
       if (config.capacity.maxOrchestratorWorkers <= 0) {
         reasons.push(
-          reason("orchestrator_workers_disabled", "MAX_ORCHESTRATOR_WORKERS=0 — merges automáticos desligados.")
+          reason("orchestrator_workers_disabled", "MAX_ORCHESTRATOR_WORKERS=0 — automatic merges are disabled.")
         );
       }
       if (budgetPaused) {
-        reasons.push(reason("budget_paused", "Harness do Orchestrator pausado por budget — merge não dispara."));
+        reasons.push(reason("budget_paused", "Orchestrator harness paused by budget — merge is not dispatched."));
       }
       if (!config.autoMergeIssues && !pendingLabeled.has(issue.id)) {
         reasons.push(
@@ -471,8 +472,8 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
       reason(
         "waiting_human",
         blockedComment
-          ? "Em Blocked — aguarda ação humana no Linear (ver comentário)."
-          : "Em Blocked — o orquestrador não puxa este estado; mova para Reopened ou To Do para retomar."
+          ? "In Blocked — waiting for human action in Linear (see the comment)."
+          : "In Blocked — the orchestrator does not pick up this state; move it to Reopened or To Do to resume."
       ),
     ];
     issues.push({
@@ -492,7 +493,7 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
     });
   }
 
-  // Ordenação estável: fase → status (travadas primeiro) → Reopened antes de Planned → identifier.
+  // Stable ordering: phase → status (stuck first) → Reopened before Planned → identifier.
   const phaseOrder: Record<ReadinessPhase, number> = {
     refine: 0,
     implement: 1,

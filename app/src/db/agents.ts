@@ -387,7 +387,7 @@ export function seedAgentsFromSouls(): void {
   for (const role of AGENT_ROLES) {
     const soul = readSoulFile(role);
     if (!soul) {
-      log.server.warn({ role }, "seed de agents: SOUL não encontrada em agents/ — papel ficará sem agente (crie pela dashboard)");
+      log.server.warn({ role }, "agent seed: SOUL not found in agents/ — role will have no agent (create one on the dashboard)");
       continue;
     }
     const agent = createAgent({

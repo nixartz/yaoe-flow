@@ -92,7 +92,7 @@ function parseValue(raw: string): string | number {
 
 function parseFilterExpr(expr: string): QueryFilter {
   const m = expr.trim().match(new RegExp(`^([a-zA-Z_][a-zA-Z0-9_]*)\\s*${OP_TOKEN_SRC}\\s*(.+)$`, "i"));
-  if (!m) throw new Error(`filtro inválido: "${expr.trim()}" (esperado: campo op valor)`);
+  if (!m) throw new Error(`invalid filter: "${expr.trim()}" (expected: field op value)`);
   const [, field, opToken, valueRaw] = m;
   return { field, op: OP_MAP[opToken.toLowerCase()], value: parseValue(valueRaw) };
 }
@@ -102,9 +102,9 @@ function parseFields(arg: string): string[] {
     .split(",")
     .map((f) => f.trim())
     .filter(Boolean);
-  if (fields.length === 0) throw new Error('"fields" precisa de ao menos uma coluna');
+  if (fields.length === 0) throw new Error('"fields" needs at least one column');
   for (const f of fields) {
-    if (!FIELD_RE.test(f)) throw new Error(`nome de campo inválido em "fields": "${f}"`);
+    if (!FIELD_RE.test(f)) throw new Error(`invalid field name in "fields": "${f}"`);
   }
   return fields;
 }
@@ -119,7 +119,7 @@ function parseFilter(arg: string): QueryFilter[] {
 function parseSort(arg: string): QuerySort[] {
   return arg.split(",").map((chunk) => {
     const m = chunk.trim().match(/^([a-zA-Z_][a-zA-Z0-9_]*)(?:\s+(asc|desc))?$/i);
-    if (!m) throw new Error(`ordenação inválida: "${chunk.trim()}" (esperado: campo [asc|desc])`);
+    if (!m) throw new Error(`invalid sort: "${chunk.trim()}" (expected: field [asc|desc])`);
     return { field: m[1], dir: (m[2]?.toLowerCase() as "asc" | "desc") ?? "desc" };
   });
 }

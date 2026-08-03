@@ -26,9 +26,9 @@ export function assertEncryptionKey(): void {
   const key = bootstrap.appEncryptionKey;
   if (!key || !/^[0-9a-fA-F]+$/.test(key) || key.length !== KEY_HEX_LENGTH) {
     throw new EncryptionKeyError(
-      "APP_ENCRYPTION_KEY ausente ou inválida. Ela é obrigatória para cifrar segredos no banco (at-rest). " +
-        "Gere uma com `openssl rand -hex 32` e defina APP_ENCRYPTION_KEY no ambiente (.env) antes de subir o serviço. " +
-        "ATENÇÃO: trocar a chave depois torna ilegíveis os segredos já gravados."
+      "APP_ENCRYPTION_KEY missing or invalid. It is required to encrypt secrets in the database (at rest). " +
+        "Generate one with `openssl rand -hex 32` and set APP_ENCRYPTION_KEY in the environment (.env) before starting the service. " +
+        "WARNING: changing the key afterwards makes previously stored secrets unreadable."
     );
   }
 }
