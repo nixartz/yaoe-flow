@@ -3,7 +3,7 @@
 // ACP do Zed; Cursor / Copilot / Goose são CLIs nativos (ou ACP nativo no
 // caso do Goose); Hermes é gateway HTTP — não tem adapter ACP.
 import { execFile, spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, symlinkSync, unlinkSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -114,6 +114,42 @@ export function harnessNpmPrefix(): string {
 
 const PATH_SEP = process.platform === "win32" ? ";" : ":";
 
+/**
+ * nvm's node bin dir — needed because ACP adapters like claude-code-acp are
+ * npm packages with a `#!/usr/bin/env node` shebang: if `node` is only
+ * reachable via nvm (never on a service manager's PATH, unlike an interactive
+ * shell that sources ~/.bashrc), the adapter fails to even exec — Bun.spawn
+ * still succeeds (it's `env` that fails), so the failure surfaces late and
+ * confusingly (ACP write EPIPE / "acp timeout: initialize") instead of a
+ * clear "not installed". Prefers the `default` alias; falls back to the
+ * highest installed version.
+ */
+function nvmNodeBinDir(home: string): string | null {
+  const versionsDir = join(home, ".nvm", "versions", "node");
+  let entries: string[];
+  try {
+    entries = readdirSync(versionsDir).filter((e) => /^v\d+\.\d+\.\d+$/.test(e));
+  } catch {
+    return null;
+  }
+  if (entries.length === 0) return null;
+
+  try {
+    const alias = readFileSync(join(home, ".nvm", "alias", "default"), "utf8").trim();
+    const wanted = alias.startsWith("v") ? alias : `v${alias}`;
+    if (entries.includes(wanted)) return join(versionsDir, wanted, "bin");
+  } catch {
+    /* no alias file, or it points at an unresolved name — fall back below */
+  }
+
+  entries.sort((a, b) => {
+    const [pa, pb] = [a, b].map((v) => v.slice(1).split(".").map(Number));
+    for (let i = 0; i < 3; i++) if (pa![i] !== pb![i]) return pb![i]! - pa![i]!;
+    return 0;
+  });
+  return join(versionsDir, entries[0]!, "bin");
+}
+
 /** Dirs onde CLIs de harness costumam viver (daemon/launchd não herdam o PATH do shell). */
 export function harnessPathCandidates(): string[] {
   const home = homedir();
@@ -126,6 +162,11 @@ export function harnessPathCandidates(): string[] {
   ];
   if (process.platform === "win32") {
     dirs.push(join(home, "AppData", "Local", "Programs", "cursor-agent"));
+  } else {
+    const nvmBin = nvmNodeBinDir(home);
+    if (nvmBin) dirs.push(nvmBin);
+    const voltaBin = join(home, ".volta", "bin"); // fixed shim path regardless of active version
+    if (existsSync(voltaBin)) dirs.push(voltaBin);
   }
   return dirs;
 }

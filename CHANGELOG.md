@@ -6,6 +6,16 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-03
+
+Patch release: fixes harness CLIs (Claude Code, Codex) failing silently when running as a systemd/launchd service on a machine where `node` is only reachable via a version manager. OKF bundle: [knowledge/changes/2026-08-03/nvm-node-path-under-service-manager](knowledge/changes/2026-08-03/nvm-node-path-under-service-manager/README.md).
+
+### Fixed
+
+- **ACP adapters (`claude-code-acp`, `codex-acp`) failing under systemd/launchd when `node` is managed by nvm/Volta**: these adapters are npm packages with a `#!/usr/bin/env node` shebang. A service manager only gets the PATH set in its unit file — not `~/.bashrc`/`~/.profile` — so if `node` is only reachable via a version manager, the adapter fails to even execute, surfacing as a confusing ACP write `EPIPE` at boot or an `acp timeout: initialize` during a run, instead of a clear "not installed". `harnessPathCandidates()` (used before every harness spawn, detection or real run) now also looks for nvm's default (or highest installed) Node version and Volta's shim directory automatically — no systemd/launchd unit edit needed, just update the binary.
+- **Harness detection false-positive**: a missing shebang interpreter produced non-empty `env: 'node': No such file or directory` output, which the generic "produced some output → installed" heuristic misreported as "installed, auth unknown" instead of "not installed" with a clear hint.
+- **Stale wizard step numbers in docs/harnesses.md**: still referenced "steps 6–7" from before 0.1.2 renumbered the wizard to 11 steps (Network binding added as step 2) — corrected to steps 7–8.
+
 ## [0.1.2] - 2026-08-03
 
 Patch release: makes the bind address a first-class setup question, and documents the (already-working) path to a custom domain. OKF bundle: [knowledge/changes/2026-08-03/network-binding-and-reverse-proxy-docs](knowledge/changes/2026-08-03/network-binding-and-reverse-proxy-docs/README.md).

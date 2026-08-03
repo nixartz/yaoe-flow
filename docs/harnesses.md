@@ -36,7 +36,7 @@ Because sessions live in the logged-in user's HOME, the daemon runs as that user
 
 [Goose](https://block.github.io/goose/) runs any model through your own OpenRouter key:
 
-1. Install goose (wizard offers it) and set `OPENROUTER_API_KEY` (wizard step 7, or dashboard Config — encrypted).
+1. Install goose (wizard offers it) and set `OPENROUTER_API_KEY` (wizard step 8, or dashboard Config — encrypted).
 2. Pick harness "goose" for the agent and set its model (e.g. `anthropic/claude-sonnet-4.5`).
 3. Optional: enable the OpenRouter **Auto Router** or per-recipe model preferences (`OPENROUTER_AUTO_*` settings).
 
@@ -65,5 +65,6 @@ Every run gets `$YAOE_HOME/worktrees/run-<id>` and, for ACP harnesses, an isolat
 
 - Dashboard → **Harness**: installed/version/auth per harness + budget caps.
 - `yaoe-flow status` / `yaoe-flow doctor`: CLI view of the same detection with install/login hints.
-- The wizard's steps 6–7 install adapters and report what is missing.
+- The wizard's steps 7–8 install adapters and report what is missing.
+- **Running as a systemd/launchd service and a harness that worked in your terminal fails there** (e.g. an ACP write `EPIPE`, or `acp timeout: initialize`): a service manager only gets the PATH you gave it — not your shell's `~/.bashrc`/`~/.profile`. The most common gap is `node`: `claude-code-acp`/`codex-acp` are npm packages with a `#!/usr/bin/env node` shebang, and if `node` is only reachable via a version manager, a service unit with a hand-written PATH won't find it even though your terminal does. yaoe-flow already looks for nvm's default (or highest installed) version and Volta's shim dir automatically — no unit edit needed, just make sure you're on a version that includes this. If you use a different version manager (asdf, fnm, `n`), add its bin dir to the unit's `Environment=PATH=...` manually.
 

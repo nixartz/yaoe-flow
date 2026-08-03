@@ -190,11 +190,19 @@ export async function detectByVersionFlag(
     });
     const out = `${await new Response(proc.stdout).text()}${await new Response(proc.stderr).text()}`;
     const code = await proc.exited;
-    if (code !== 0 && !out.trim()) {
+    // A missing shebang interpreter (e.g. `node` only reachable via nvm, not
+    // on a service manager's PATH) makes `env` print a clear, unambiguous
+    // error instead of Bun.spawn failing outright — treat it as "not
+    // installed" rather than the generic "produced some output" fallback
+    // below, which would otherwise misreport this as "installed".
+    const missingInterpreter = /\/usr\/bin\/env: .*No such file or directory/.test(out);
+    if (code !== 0 && (!out.trim() || missingInterpreter)) {
       return {
         installed: false,
         authStatus: "unknown",
-        installHint: opts?.installHint,
+        installHint: missingInterpreter
+          ? `${opts?.installHint ?? ""} (interpreter not found on PATH: ${out.trim()})`.trim()
+          : opts?.installHint,
         checkedAt: Date.now(),
       };
     }
