@@ -90,6 +90,8 @@ Each role runs on the **harness** you choose — your existing subscription CLIs
 
 The installer prints where the executable landed. Updating = re-running the installer (idempotent). Uninstalling = `rm` the binary + `rm -rf ~/.yaoe-flow`.
 
+x64 binaries auto-detect AVX2 support (2013+ CPUs) and fall back to a `-baseline` build on older hardware — if you ever hit `Illegal instruction` right after installing, re-run with `YAOE_FORCE_BASELINE=1` (`$env:YAOE_FORCE_BASELINE='1'` on PowerShell).
+
 ## Getting started
 
 1. **Run the wizard** — `yaoe-flow setup`. First run walks you through everything: system deps, keys (generated for you), Valkey, Linear, GitHub, first dashboard admin, harnesses. It tells you where to create each API key and which permissions are actually required. Running it again opens a navigation menu to view/edit any section.

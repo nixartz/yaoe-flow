@@ -6,6 +6,14 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-03
+
+Patch release: fixes a crash on x64 CPUs older than 2013. OKF bundle: [knowledge/changes/2026-08-03/avx2-baseline-builds](knowledge/changes/2026-08-03/avx2-baseline-builds/README.md).
+
+### Fixed
+
+- **`Illegal instruction (core dumped)` on pre-Haswell x64 CPUs**: the compiled `yaoe-flow-linux-x64`/`yaoe-flow-darwin-x64`/`yaoe-flow-windows-x64.exe` binaries used Bun's default x64 target, which requires AVX2 (2013+ CPUs) and crashes immediately on any older CPU (e.g. a 2012-era Core i7-3xxx). Release now also builds and publishes `-baseline` variants (no AVX2 required, Nehalem/2008+) for all three x64 platforms; `install.sh`/`install.ps1` detect the host's AVX2 support and pick the matching asset automatically (override with `YAOE_FORCE_BASELINE=1`/`0`).
+
 ## [0.1.0] - 2026-08-02
 
 First public release, extracted from the `nixartz/ai-agents` monorepo (fresh history). OKF bundle: [knowledge/changes/2026-08-02/repo-migration-and-rename](knowledge/changes/2026-08-02/repo-migration-and-rename/README.md).

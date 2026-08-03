@@ -10,6 +10,8 @@
 #   YAOE_VERSION        pin a version (e.g. v0.1.0) — default: latest
 #   YAOE_INSTALL_DIR    custom destination (default: /usr/local/bin or ~/.local/bin)
 #   YAOE_DRY_RUN=1      show what would happen without downloading/installing
+#   YAOE_FORCE_BASELINE force the AVX2 auto-detection below (1 = baseline
+#                       asset, 0 = standard asset) — only meaningful on x64
 set -euo pipefail
 
 REPO="${YAOE_RELEASE_REPO:-nixartz/yaoe-flow}"
@@ -35,6 +37,31 @@ case "$arch" in
     ;;
 esac
 asset="yaoe-flow-$os-$arch"
+
+# The x64 binaries ship in two flavors: the standard one needs a CPU with
+# AVX2 (Haswell/2013+ — Bun's compiled binaries use it unconditionally and
+# crash with "Illegal instruction" on older CPUs, e.g. pre-2013 Intel Macs);
+# "-baseline" targets Nehalem/2008+ instead, no AVX2 required. arm64 has no
+# such split (Apple Silicon / ARM servers don't hit this).
+has_avx2() {
+  case "$os" in
+    linux) grep -qm1 '\bavx2\b' /proc/cpuinfo 2>/dev/null ;;
+    darwin) sysctl -n machdep.cpu.leaf7_features 2>/dev/null | grep -qi avx2 ;;
+    *) return 0 ;; # unknown probe — assume modern, matches prior behavior
+  esac
+}
+if [ "$arch" = "x64" ]; then
+  case "${YAOE_FORCE_BASELINE:-}" in
+    1) asset="${asset}-baseline" ;;
+    0) ;;
+    *)
+      if ! has_avx2; then
+        echo "ℹ️  CPU lacks AVX2 — using the baseline build (set YAOE_FORCE_BASELINE=0 to override)"
+        asset="${asset}-baseline"
+      fi
+      ;;
+  esac
+fi
 
 api="https://api.github.com/repos/$REPO/releases"
 if [ -z "$TAG" ]; then

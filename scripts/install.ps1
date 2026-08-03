@@ -7,6 +7,8 @@
 #   YAOE_VERSION        pin a version (e.g. v0.1.0) — default: latest
 #   YAOE_INSTALL_DIR    custom destination (default: %LOCALAPPDATA%\Programs\yaoe-flow)
 #   YAOE_DRY_RUN=1      show what would happen without downloading/installing
+#   YAOE_FORCE_BASELINE force the AVX2 auto-detection below (1 = baseline
+#                       asset, 0 = standard asset)
 $ErrorActionPreference = "Stop"
 
 $Repo = if ($env:YAOE_RELEASE_REPO) { $env:YAOE_RELEASE_REPO } else { "nixartz/yaoe-flow" }
@@ -20,6 +22,33 @@ if ($arch -eq "arm64") {
   $arch = "x64"
 }
 $asset = "yaoe-flow-windows-$arch.exe"
+
+# The x64 binary needs a CPU with AVX2 (Haswell/2013+ — Bun's compiled
+# binaries use it unconditionally and crash on older CPUs); "-baseline"
+# targets Nehalem/2008+ instead. Detected via the same Win32 API .NET/Bun use
+# internally (works on both Windows PowerShell 5.1 and PowerShell 7+, unlike
+# System.Runtime.Intrinsics which needs .NET Core).
+function Test-Avx2Supported {
+  try {
+    $sig = '[DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint f);'
+    Add-Type -MemberDefinition $sig -Name "Kernel32Probe" -Namespace "YaoeFlow" -ErrorAction Stop
+    # PF_AVX2_INSTRUCTIONS_AVAILABLE = 17 (winnt.h)
+    return [YaoeFlow.Kernel32Probe]::IsProcessorFeaturePresent(17)
+  } catch {
+    return $null # inconclusive — caller decides the safe default
+  }
+}
+if ($env:YAOE_FORCE_BASELINE -eq "1") {
+  $asset = $asset -replace "\.exe$", "-baseline.exe"
+} elseif ($env:YAOE_FORCE_BASELINE -ne "0") {
+  $avx2 = Test-Avx2Supported
+  if ($avx2 -eq $false) {
+    Write-Host "ℹ️  CPU lacks AVX2 — using the baseline build (set YAOE_FORCE_BASELINE=0 to override)"
+    $asset = $asset -replace "\.exe$", "-baseline.exe"
+  } elseif ($null -eq $avx2) {
+    Write-Host "⚠️  could not detect AVX2 support — assuming a modern CPU. If yaoe-flow.exe crashes immediately with an illegal-instruction error, re-run with `$env:YAOE_FORCE_BASELINE='1'"
+  }
+}
 
 if (-not $Tag) {
   $Tag = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest").tag_name

@@ -54,16 +54,24 @@ jobs:
           mkdir -p ../dist
           commit_short="${GITHUB_SHA:0:7}"
           # "name:target" instead of an associative array — no bash 4+ needed.
+          # x64 targets ship in two flavors: the plain one requires AVX2
+          # (Haswell/2013+ — Bun's SIMD codepaths use it unconditionally), the
+          # "-baseline" one targets Nehalem/2008+ (no AVX2 requirement) at a
+          # small perf cost. arm64 has no such split. install.sh/install.ps1
+          # probe the target CPU and pick the matching asset automatically.
           for pair in \
             linux-x64:bun-linux-x64 \
+            linux-x64-baseline:bun-linux-x64-baseline \
             linux-arm64:bun-linux-arm64 \
             darwin-x64:bun-darwin-x64 \
+            darwin-x64-baseline:bun-darwin-x64-baseline \
             darwin-arm64:bun-darwin-arm64 \
-            windows-x64:bun-windows-x64; do
+            windows-x64:bun-windows-x64 \
+            windows-x64-baseline:bun-windows-x64-baseline; do
             name="${pair%%:*}"
             target="${pair##*:}"
             ext=""
-            [ "$name" = "windows-x64" ] && ext=".exe"
+            case "$name" in windows-x64|windows-x64-baseline) ext=".exe" ;; esac
             bun build --compile --minify \
               --define YAOE_VERSION="\"$YFLOW_VERSION\"" \
               --define YAOE_COMMIT="\"$commit_short\"" \
@@ -76,18 +84,20 @@ jobs:
         working-directory: dist
         run: sha256sum yaoe-flow-* > SHA256SUMS
 
-      - name: Smoke test (host-native binary)
+      - name: Smoke test (host-native binaries, both AVX2 flavors)
         working-directory: dist
         env:
           YFLOW_VERSION: ${{ steps.version.outputs.value }}
         run: |
-          chmod +x yaoe-flow-linux-x64
-          out=$(./yaoe-flow-linux-x64 version)
-          echo "$out"
-          echo "$out" | grep -q "yaoe-flow $YFLOW_VERSION " || {
-            echo "::error::reported version does not match the tag"; exit 1;
-          }
-          YAOE_HOME="$RUNNER_TEMP/yaoe-smoke" ./yaoe-flow-linux-x64 doctor --offline || true
+          for bin in yaoe-flow-linux-x64 yaoe-flow-linux-x64-baseline; do
+            chmod +x "$bin"
+            out=$(./"$bin" version)
+            echo "$out"
+            echo "$out" | grep -q "yaoe-flow $YFLOW_VERSION " || {
+              echo "::error::$bin: reported version does not match the tag"; exit 1;
+            }
+            YAOE_HOME="$RUNNER_TEMP/yaoe-smoke-$bin" ./"$bin" doctor --offline || true
+          done
 
       - uses: actions/upload-artifact@v4
         with:
@@ -99,10 +109,12 @@ jobs:
 
   # ── Verify: each binary EXECUTES on its REAL platform, not just compiles —
   # downloads this run's artifact and runs `version`/`doctor --offline`.
-  # darwin-x64 is intentionally NOT verified here: the macos-13 runner queue
-  # on GitHub-hosted Actions is unreliable (can sit queued for hours with no
-  # capacity) — the binary is still built and released, just not smoke-tested
-  # on real macOS 13. Revisit if GitHub adds a faster Intel-mac runner. ──
+  # darwin-x64/darwin-x64-baseline are intentionally NOT verified here: the
+  # macos-13 runner queue on GitHub-hosted Actions is unreliable (can sit
+  # queued for hours with no capacity) — both binaries are still built and
+  # released, just not smoke-tested on real Intel macOS. Revisit if GitHub
+  # adds a faster Intel-mac runner. macos-latest is Apple Silicon (arm64) and
+  # cannot run x64 binaries without Rosetta, which these runners don't have. ──
   verify:
     needs: build
     timeout-minutes: 10
@@ -112,12 +124,16 @@ jobs:
         include:
           - os: ubuntu-latest
             asset: yaoe-flow-linux-x64
+          - os: ubuntu-latest
+            asset: yaoe-flow-linux-x64-baseline
           - os: ubuntu-24.04-arm
             asset: yaoe-flow-linux-arm64
           - os: macos-latest
             asset: yaoe-flow-darwin-arm64
           - os: windows-latest
             asset: yaoe-flow-windows-x64.exe
+          - os: windows-latest
+            asset: yaoe-flow-windows-x64-baseline.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/download-artifact@v4
