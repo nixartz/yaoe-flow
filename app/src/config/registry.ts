@@ -654,6 +654,16 @@ const harnessGroup: SettingMeta[] = [
     description: "API_SERVER_KEY of the Hermes gateway.",
   },
   {
+    key: "CURSOR_API_KEY",
+    group: "Harness Cursor",
+    type: "string",
+    default: "",
+    secret: true,
+    scope: "harness",
+    description:
+      "Cursor User API Key for headless/daemon auth (https://cursor.com/dashboard/api). Preferred over browser login when running as a systemd/launchd service. Passed to `cursor-agent` as --api-key / CURSOR_API_KEY. Admin/org keys are not accepted by the CLI.",
+  },
+  {
     key: "CURSOR_ISOLATE_MCP_CONFIG",
     group: "Harness Cursor",
     type: "boolean",

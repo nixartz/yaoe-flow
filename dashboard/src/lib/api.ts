@@ -492,6 +492,16 @@ export const harnessApi = {
   setBudgets: (id: string, budgets: HarnessBudgets) =>
     request<{ ok: boolean; budgets: HarnessBudgets }>(`/harness/${id}/budgets`, { method: "PUT", body: JSON.stringify(budgets) }),
   budgetBanners: () => request<{ banners: BudgetStatus[] }>("/harness/budget-banners"),
+  startCursorLogin: () =>
+    request<{ url: string | null; alreadyLoggedIn: boolean; message: string }>("/harness/cursor/login", {
+      method: "POST",
+    }),
+  cursorLoginStatus: () =>
+    request<{
+      session: { active: boolean; url: string | null; startedAt?: number; error?: string };
+      auth: { loggedIn: boolean; account?: string; raw: string };
+    }>("/harness/cursor/login"),
+  cancelCursorLogin: () => request<{ ok: boolean }>("/harness/cursor/login", { method: "DELETE" }),
 };
 
 // ── Notificações (Fase 3 — §8.1) ──

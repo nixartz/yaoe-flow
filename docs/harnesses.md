@@ -27,10 +27,10 @@ These run **your** logged-in CLI session — no extra API key needed.
 
 - **Claude Code**: needs the `claude` CLI logged in + the ACP adapter `@zed-industries/claude-code-acp` (npm; the wizard installs it).
 - **Codex**: needs the `codex` CLI + the `codex-acp` adapter (npm).
-- **Cursor**: needs `cursor-agent` (official installer: `curl -fsS https://cursor.com/install | bash`) — ACP is native.
+- **Cursor**: needs `cursor-agent` (official installer: `curl -fsS https://cursor.com/install | bash`) — ACP is native. On a headless server / systemd service, set **`CURSOR_API_KEY`** (User API Key from [cursor.com/dashboard/api](https://cursor.com/dashboard/api)) in Config or Harness — browser/keychain login breaks under the per-run HOME mirror. Alternatively use **Harness → Log in to Cursor** (prints a URL; credentials use the file store, not the `cursor-user` keychain).
 - **Copilot**: needs the `copilot` CLI — detection/report supported.
 
-Because sessions live in the logged-in user's HOME, the daemon runs as that user (it refuses root) and works best on a workstation or a VM where you have logged the CLIs in once.
+Because sessions live in the logged-in user's HOME, the daemon runs as that user (it refuses root) and works best on a workstation or a VM where you have logged the CLIs in once. For Cursor specifically, prefer `CURSOR_API_KEY` when the machine has no GUI.
 
 ## Goose via ACP (OpenRouter BYOK)
 

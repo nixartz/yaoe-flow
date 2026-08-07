@@ -155,6 +155,9 @@ export const config = {
 
   // Harness Cursor (`cursor-agent acp`) — ver description no registry.
   cursor: {
+    get apiKey() {
+      return svc.str("CURSOR_API_KEY");
+    },
     get isolateMcpConfig() {
       return svc.bool("CURSOR_ISOLATE_MCP_CONFIG");
     },

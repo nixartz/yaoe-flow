@@ -20,3 +20,23 @@ export const budgetsBody = z.object({
   unit: z.enum(["usd", "tokens"]).optional(),
   action: z.enum(["avisar", "pausar"]).optional(),
 });
+
+export const cursorLoginResponse = z.object({
+  url: z.string().nullable(),
+  alreadyLoggedIn: z.boolean(),
+  message: z.string(),
+});
+
+export const cursorLoginStatusResponse = z.object({
+  session: z.object({
+    active: z.boolean(),
+    url: z.string().nullable(),
+    startedAt: z.number().optional(),
+    error: z.string().optional(),
+  }),
+  auth: z.object({
+    loggedIn: z.boolean(),
+    account: z.string().optional(),
+    raw: z.string(),
+  }),
+});

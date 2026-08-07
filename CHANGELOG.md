@@ -6,6 +6,16 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cursor harness auth under isolated HOME / headless systemd**: the per-run HOME mirror made `cursor-agent` probe the `cursor-user` keychain (or open a browser) instead of the daemon user's session. Spawns now use `AGENT_CLI_CREDENTIAL_STORE=file`, pass `--api-key` when configured, and wait/retry with the login URL surfaced in the run chat. OKF: [knowledge/changes/2026-08-06/cursor-headless-auth-and-config-tabs](knowledge/changes/2026-08-06/cursor-headless-auth-and-config-tabs/README.md).
+- **Config sidebar categories empty / dumped into "Somente leitura"**: UI category map still used Portuguese group names after the registry moved to English — restored EN mappings (and Harness card settings for Goose/Hermes/Cursor).
+
+### Added
+
+- **`CURSOR_API_KEY`** (secret, Config + Harness): User API Key for headless Cursor ACP auth, encrypted at rest.
+- **Harness → Log in to Cursor**: browserless `cursor-agent login` with a URL to open on another machine.
+
 ## [0.1.3] - 2026-08-03
 
 Patch release: fixes harness CLIs (Claude Code, Codex) failing silently when running as a systemd/launchd service on a machine where `node` is only reachable via a version manager. OKF bundle: [knowledge/changes/2026-08-03/nvm-node-path-under-service-manager](knowledge/changes/2026-08-03/nvm-node-path-under-service-manager/README.md).

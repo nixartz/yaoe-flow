@@ -11,6 +11,8 @@ import {
   IconInfoCircle,
   IconChevronDown,
   IconChevronRight,
+  IconLogin,
+  IconExternalLink,
 } from "@tabler/icons-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +103,102 @@ function CapabilityBadges({ h }: { h: HarnessReportEntry }) {
   );
 }
 
+function CursorLoginPanel({ onLoggedIn }: { onLoggedIn: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const start = useMutation({
+    mutationFn: () => harnessApi.startCursorLogin(),
+    onSuccess: (res) => {
+      setError(null);
+      setMessage(res.message);
+      setUrl(res.url);
+      if (res.alreadyLoggedIn) onLoggedIn();
+    },
+    onError: (e) => {
+      setError(e instanceof ApiError ? e.message : "Falha ao iniciar login");
+    },
+  });
+
+  const { data: status } = useQuery({
+    queryKey: ["harness", "cursor-login"],
+    queryFn: () => harnessApi.cursorLoginStatus(),
+    enabled: Boolean(url) || start.isSuccess,
+    refetchInterval: (q) => (q.state.data?.auth.loggedIn ? false : 2_500),
+  });
+
+  useEffect(() => {
+    if (status?.session.url) setUrl(status.session.url);
+  }, [status?.session.url]);
+
+  useEffect(() => {
+    if (status?.auth.loggedIn) onLoggedIn();
+    // Intentionally only when login flips to true — parent invalidates harness list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onLoggedIn is an invalidate callback
+  }, [status?.auth.loggedIn]);
+
+  const cancel = useMutation({
+    mutationFn: () => harnessApi.cancelCursorLogin(),
+    onSuccess: () => {
+      setUrl(null);
+      setMessage(null);
+    },
+  });
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-dashed px-3 py-2 text-xs">
+      <p className="font-medium text-foreground">Login do Cursor (servidor sem navegador)</p>
+      <p className="text-muted-foreground">
+        Preferível: salve uma User API Key em Credenciais abaixo (CURSOR_API_KEY). Alternativa: gerar um link de
+        login e abrir no seu computador.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-8 gap-1 text-xs"
+          disabled={start.isPending}
+          onClick={() => start.mutate()}
+        >
+          {start.isPending ? <IconLoader2 className="size-3.5 animate-spin" /> : <IconLogin className="size-3.5" />}
+          Log in to Cursor
+        </Button>
+        {(url || status?.session.active) && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 text-xs"
+            disabled={cancel.isPending}
+            onClick={() => cancel.mutate()}
+          >
+            Cancelar
+          </Button>
+        )}
+      </div>
+      {message && <p className="text-muted-foreground">{message}</p>}
+      {error && <p className="text-destructive">{error}</p>}
+      {url && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-start gap-1 break-all text-primary underline-offset-2 hover:underline"
+        >
+          <IconExternalLink className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          {url}
+        </a>
+      )}
+      {status?.auth.loggedIn && (
+        <p className="flex items-center gap-1 text-foreground">
+          <IconCheck className="size-3.5" aria-hidden />
+          Login detectado{status.auth.account ? ` · ${status.auth.account}` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function HarnessCard({
   h,
   settingDrafts,
@@ -180,6 +278,13 @@ function HarnessCard({
             <IconInfoCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             <span>Login: {h.detection.loginHint}</span>
           </p>
+        )}
+        {h.id === "cursor" && h.detection?.installed && (
+          <CursorLoginPanel
+            onLoggedIn={() => {
+              void qc.invalidateQueries({ queryKey: ["harness"] });
+            }}
+          />
         )}
         {h.detection?.checkedAt && (
           <p className="text-xs text-muted-foreground">Verificado em {formatDateTime(h.detection.checkedAt)}</p>

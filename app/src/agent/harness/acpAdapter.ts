@@ -14,6 +14,12 @@ import { join } from "node:path";
 import { resolveHarnessBin, withHarnessSpawnEnv } from "../../cli/setup/harnessDeps";
 import { agentLog, errFields } from "../../logger";
 import { runAcpTurn, listAcpModels, cleanupWorkspace, type AcpProcess } from "../acp/client";
+import {
+  extractCursorLoginUrl,
+  isCursorAuthRequiredError,
+  resolveCursorApiKey,
+  waitForCursorAuth,
+} from "./cursorAuth";
 import type {
   HarnessAdapter,
   HarnessCapabilities,
@@ -27,6 +33,8 @@ import type {
 /** Ajustes de spawn resolvidos por run (ex.: HOME isolado do Cursor). */
 export interface AcpSpawnPrep {
   env?: Record<string, string>;
+  /** Override dos args do binário (ex.: Cursor `--api-key … acp`). */
+  args?: string[];
   /** Chamado no fim do run (sempre), pra limpar o que o prepare criou. */
   cleanup?(): void;
 }
@@ -51,6 +59,12 @@ export interface AcpAdapterSpec {
   args?: string[];
   /** Cursor ACP: `cursor_login` após initialize. */
   authenticateMethodId?: string;
+  /**
+   * When ACP authenticate fails with a browser/loginDeepControl URL (or
+   * equivalent "not authenticated"), emit the URL in the run chat, wait for
+   * the operator to finish login / set an API key, then retry the turn once.
+   */
+  authWaitOnLoginUrl?: boolean;
   capabilities: HarnessCapabilities;
   /** Sonda de instalação/versão/auth — cada CLI tem seu próprio comando (ver docs/harness-notes.md). */
   detect(): Promise<HarnessDetection>;
@@ -74,40 +88,87 @@ export function createAcpAdapter(spec: AcpAdapterSpec): HarnessAdapter {
 
     const result = (async () => {
       let prep: AcpSpawnPrep | undefined;
+      const maxAuthAttempts = spec.authWaitOnLoginUrl ? 2 : 1;
+      let resumeSessionId = input.resumeSessionId;
       try {
-        const baseEnv = withHarnessSpawnEnv(spec.buildEnv(input));
-        prep = spec.prepareSpawn?.(input, baseEnv);
-        const { result } = await runAcpTurn({
-          spawn: {
-            bin: resolveHarnessBin(spec.bin),
-            args: spec.args ?? [],
-            env: prep?.env ?? baseEnv,
-            cwd: input.cwd,
-          },
-          authenticateMethodId: spec.authenticateMethodId,
-          model: input.model,
-          preferFast: input.preferFast,
-          mcpServers: input.mcpServers,
-          promptText,
-          requestTimeoutMs: spec.requestTimeoutMs ?? 45 * 60_000,
-          resumeSessionId: input.resumeSessionId,
-          log,
-          onEvent: input.onEvent,
-          // Referência do processo chega ANTES de qualquer await — kill() no
-          // meio do run (Pausar/Encerrar, reclaimStale) mata de verdade.
-          onProcess(p) {
-            processRef = p;
-            if (killed) p.kill();
-          },
-        });
-        return {
-          outputText: result.outputText,
-          stopReason: result.stopReason,
-          usage: result.usage,
-          sessionId: result.sessionId,
-          externalRefs: { sessionId: result.sessionId },
-          finalStatus: "completed" as const,
-        };
+        for (let authAttempt = 1; authAttempt <= maxAuthAttempts; authAttempt++) {
+          try {
+            prep?.cleanup?.();
+            prep = undefined;
+            const baseEnv = withHarnessSpawnEnv(spec.buildEnv(input));
+            prep = spec.prepareSpawn?.(input, baseEnv);
+            const { result: turn } = await runAcpTurn({
+              spawn: {
+                bin: resolveHarnessBin(spec.bin),
+                args: prep?.args ?? spec.args ?? [],
+                env: prep?.env ?? baseEnv,
+                cwd: input.cwd,
+              },
+              authenticateMethodId: spec.authenticateMethodId,
+              model: input.model,
+              preferFast: input.preferFast,
+              mcpServers: input.mcpServers,
+              promptText,
+              requestTimeoutMs: spec.requestTimeoutMs ?? 45 * 60_000,
+              resumeSessionId,
+              log,
+              onEvent: input.onEvent,
+              // Referência do processo chega ANTES de qualquer await — kill() no
+              // meio do run (Pausar/Encerrar, reclaimStale) mata de verdade.
+              onProcess(p) {
+                processRef = p;
+                if (killed) p.kill();
+              },
+            });
+            return {
+              outputText: turn.outputText,
+              stopReason: turn.stopReason,
+              usage: turn.usage,
+              sessionId: turn.sessionId,
+              externalRefs: { sessionId: turn.sessionId },
+              finalStatus: "completed" as const,
+            };
+          } catch (e) {
+            const canWait =
+              spec.authWaitOnLoginUrl && authAttempt < maxAuthAttempts && isCursorAuthRequiredError(e) && !killed;
+            if (!canWait) throw e;
+
+            const url = extractCursorLoginUrl(e);
+            const lines = [
+              "Cursor authentication required before this run can continue.",
+              url
+                ? `Open this link in a browser (on any machine):\n${url}`
+                : "No login URL was returned by the CLI.",
+              "",
+              "Preferred on servers: set CURSOR_API_KEY in Config (or Harness → Cursor).",
+              "Or use Harness → Log in to Cursor, then wait — this run will retry automatically.",
+            ];
+            input.onEvent({
+              kind: "agent_message_chunk",
+              text: `${lines.join("\n")}\n`,
+              payload: { type: "cursor_auth_required", url, attempt: authAttempt },
+            });
+
+            const ready = await waitForCursorAuth({
+              apiKey: resolveCursorApiKey({ settings: input.settings, env: input.env }),
+              shouldAbort: () => killed,
+              onProgress(msg) {
+                input.onEvent({
+                  kind: "agent_message_chunk",
+                  text: `${msg}\n`,
+                  payload: { type: "cursor_auth_wait", message: msg },
+                });
+              },
+            });
+            if (!ready) {
+              throw e instanceof Error ? e : new Error(String(e));
+            }
+            // Fresh spawn on retry — drop resume so we don't load a half-authed session.
+            resumeSessionId = undefined;
+            log.info({ attempt: authAttempt }, "cursor auth ready — retrying ACP turn");
+          }
+        }
+        throw new Error("acp adapter: exhausted auth retries");
       } catch (e) {
         log.error({ ...errFields(e) }, "acp adapter run failed");
         throw e;
@@ -150,7 +211,12 @@ export function createAcpAdapter(spec: AcpAdapterSpec): HarnessAdapter {
     try {
       prep = spec.prepareSpawn?.(ctx, baseEnv);
       return await listAcpModels({
-        spawn: { bin: resolveHarnessBin(spec.bin), args: spec.args ?? [], env: prep?.env ?? baseEnv, cwd },
+        spawn: {
+          bin: resolveHarnessBin(spec.bin),
+          args: prep?.args ?? spec.args ?? [],
+          env: prep?.env ?? baseEnv,
+          cwd,
+        },
         authenticateMethodId: spec.authenticateMethodId,
         log,
       });

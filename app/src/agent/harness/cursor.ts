@@ -2,18 +2,26 @@
 // do Goose/Claude/Codex. Fluxo oficial (https://cursor.com/docs/cli/acp):
 // initialize → authenticate(cursor_login) → session/new → session/prompt,
 // com session/update (step-by-step) e session/request_permission.
-// Auth: CLI logado (`agent login`) ou CURSOR_API_KEY (D5/D6).
+// Auth: CLI logado (`agent login` + file credential store) ou CURSOR_API_KEY (D5/D6).
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { config } from "../../config";
 import { log, errFields } from "../../logger";
 import { createAcpAdapter, detectByVersionFlag, type AcpSpawnContext, type AcpSpawnPrep } from "./acpAdapter";
-import { hostHome, mirrorDirExcept, writeCursorCliAttribution } from "./attribution";
+import { mirrorDirExcept, writeCursorCliAttribution } from "./attribution";
+import {
+  cursorAcpArgs,
+  cursorCredentialEnv,
+  cursorDaemonHome,
+  probeCursorAuthStatus,
+  resolveCursorApiKey,
+} from "./cursorAuth";
 import { applyGhIsolation, HOST_GIT_ENTRIES_TO_ISOLATE } from "./gitRunEnv";
 
 function buildEnv(input: AcpSpawnContext): Record<string, string> {
-  const env = { ...input.env };
-  const apiKey = (input.settings.apiKey as string | undefined) || env.CURSOR_API_KEY;
+  // File credential store + no browser: required under isolated HOME / systemd.
+  const env = cursorCredentialEnv({ ...input.env });
+  const apiKey = resolveCursorApiKey({ settings: input.settings, env: input.env });
   if (apiKey) env.CURSOR_API_KEY = apiKey;
   if (!env.LINEAR_API_TOKEN && env.LINEAR_API_KEY) env.LINEAR_API_TOKEN = env.LINEAR_API_KEY;
   if (!env.GITHUB_PERSONAL_ACCESS_TOKEN && env.GITHUB_TOKEN) env.GITHUB_PERSONAL_ACCESS_TOKEN = env.GITHUB_TOKEN;
@@ -39,6 +47,10 @@ function buildEnv(input: AcpSpawnContext): Record<string, string> {
  * Os MCPs de verdade entram pelo `session/new`, em memória — segredo nenhum
  * toca disco (invariante do repo).
  *
+ * Auth sob HOME isolado: o CLI ainda tenta o keychain `cursor-user` e falha em
+ * headless. Por isso `buildEnv` força `AGENT_CLI_CREDENTIAL_STORE=file` e, quando
+ * há key, passa `--api-key` nos args do spawn (docs ACP).
+ *
  * git/gh são a exceção ao espelho (D6): symlink faria `gh auth login` e
  * `git config --global` do agent reescreverem os arquivos DA PESSOA que roda o
  * daemon. Então:
@@ -53,6 +65,9 @@ function buildEnv(input: AcpSpawnContext): Record<string, string> {
  * symlink herdaria a preferência do host e o flag da dashboard não valeria.
  */
 export function isolatedCursorHome(input: AcpSpawnContext, env: Record<string, string>): AcpSpawnPrep {
+  const apiKey = resolveCursorApiKey({ settings: input.settings, env });
+  const acpArgs = cursorAcpArgs(apiKey);
+
   if (!config.cursor.isolateMcpConfig) {
     // Sem HOME isolado ainda dá pra forçar atribuição via CURSOR_CONFIG_DIR
     // (docs: custom directory com cli-config.json).
@@ -62,6 +77,7 @@ export function isolatedCursorHome(input: AcpSpawnContext, env: Record<string, s
       writeCursorCliAttribution(configDir, config.cursor.attribution);
       return {
         env: { ...env, CURSOR_CONFIG_DIR: configDir },
+        args: acpArgs,
         cleanup() {
           rmSync(configDir, { recursive: true, force: true });
         },
@@ -71,13 +87,14 @@ export function isolatedCursorHome(input: AcpSpawnContext, env: Record<string, s
         { harness: "cursor", runId: input.runId, ...errFields(e) },
         "could not build CURSOR_CONFIG_DIR for attribution — continuing without an override"
       );
-      return { env };
+      return { env, args: acpArgs };
     }
   }
 
   // Irmão do workspace do run (não DENTRO dele: o agente lista o próprio cwd).
   const homeDir = `${input.cwd.replace(/[/\\]+$/, "")}-home`;
-  const realHome = hostHome(env);
+  // Always mirror the daemon user's real HOME — never a leaked worktree HOME.
+  const realHome = cursorDaemonHome(env);
   try {
     mkdirSync(dirname(homeDir), { recursive: true });
     rmSync(homeDir, { recursive: true, force: true });
@@ -116,13 +133,14 @@ export function isolatedCursorHome(input: AcpSpawnContext, env: Record<string, s
       { harness: "cursor", runId: input.runId, homeDir, ...errFields(e) },
       "could not build the run's isolated HOME — continuing with the real HOME (the machine's MCPs may hit the tool limit)"
     );
-    return { env };
+    return { env, args: acpArgs };
   }
 
   const isolatedEnv = { ...env, HOME: homeDir };
   applyGhIsolation(isolatedEnv, homeDir);
   return {
     env: isolatedEnv,
+    args: acpArgs,
     cleanup() {
       // Symlinks + mcp.json + a cópia do .gitconfig: `rmSync` não segue link,
       // então isto NUNCA apaga nada do HOME real.
@@ -137,6 +155,8 @@ export const cursorAdapter = createAcpAdapter({
   bin: "cursor-agent",
   args: ["acp"],
   authenticateMethodId: "cursor_login",
+  /** Wait + retry once when ACP asks for browser login (headless / keychain). */
+  authWaitOnLoginUrl: true,
   capabilities: {
     integration: "acp",
     // O Cursor enumera os modelos no `session/new` (`models.availableModels`),
@@ -154,11 +174,36 @@ export const cursorAdapter = createAcpAdapter({
     mcp: true,
     kill: true,
   },
-  detect: () =>
-    detectByVersionFlag("cursor-agent", {
+  detect: async () => {
+    const loginHint =
+      "Set CURSOR_API_KEY in Config (or Harness), or use Harness → Log in to Cursor. Prefer a User API Key from https://cursor.com/dashboard/api";
+    const base = await detectByVersionFlag("cursor-agent", {
       authEnvVar: "CURSOR_API_KEY",
       installHint: "curl -fsS https://cursor.com/install | bash  (cria cursor-agent em ~/.local/bin)",
-    }),
+    });
+    if (!base.installed) return { ...base, loginHint };
+    // Config/db key counts as auth even when not exported in process.env.
+    const apiKey = resolveCursorApiKey({});
+    if (apiKey) {
+      return {
+        ...base,
+        authStatus: "ok",
+      };
+    }
+    const st = await probeCursorAuthStatus();
+    if (st.loggedIn) {
+      return {
+        ...base,
+        authStatus: "ok",
+        authAccount: st.account,
+      };
+    }
+    return {
+      ...base,
+      authStatus: base.authStatus === "ok" ? "ok" : "not-logged",
+      loginHint,
+    };
+  },
   buildEnv,
   prepareSpawn: isolatedCursorHome,
 });

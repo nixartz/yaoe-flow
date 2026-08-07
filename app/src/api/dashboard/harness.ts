@@ -1,12 +1,24 @@
 import { Hono } from "hono";
 import { describeRoute, validator } from "hono-openapi";
 import { jsonContent } from "../shared/openapi";
-import { errorBody, okBody, idParam, looseObject } from "../shared/schemas";
-import { harnessListResponse, harnessModelsResponse, budgetsBody } from "./harness.schema";
+import { errorBody, okBody, looseObject } from "../shared/schemas";
+import {
+  harnessListResponse,
+  harnessModelsResponse,
+  budgetsBody,
+  cursorLoginResponse,
+  cursorLoginStatusResponse,
+} from "./harness.schema";
 import { harnessReport, redetectHarness, detectAllHarnesses, getCachedDetection } from "../../agent/harness/detect";
 import { budgetBanners, type BudgetStatus } from "../../agent/harness/budget";
 import { listHarnessIds, HARNESS_ADAPTERS } from "../../agent/harness/registry";
 import type { HarnessId } from "../../agent/harness/types";
+import {
+  cancelCursorInteractiveLogin,
+  getCursorInteractiveLoginState,
+  probeCursorAuthStatus,
+  startCursorInteractiveLogin,
+} from "../../agent/harness/cursorAuth";
 import { settingsReport } from "../../config/service";
 import { setBudgets as persistBudgets, type HarnessBudgets } from "../../agent/harness/detect";
 import { authUser } from "../../dashboard/auth";
@@ -14,12 +26,13 @@ import { log } from "../../logger";
 
 export const harnessRoutes = new Hono();
 
+/** Must match `group` in app/src/config/registry.ts (English names). */
 const SETTINGS_GROUP_BY_HARNESS: Record<HarnessId, string[]> = {
-  goose: ["Harness Goose / OpenRouter (migra pra tela Harness — Fase 2)"],
-  hermes: ["Harness Hermes (migra pra tela Harness — Fase 2)"],
-  "claude-code": [],
-  codex: [],
-  cursor: [],
+  goose: ["Harness Goose / OpenRouter"],
+  hermes: ["Harness Hermes"],
+  "claude-code": ["Harness Claude Code"],
+  codex: ["Harness Codex"],
+  cursor: ["Harness Cursor"],
   copilot: [],
 };
 
@@ -53,6 +66,68 @@ harnessRoutes.post(
     const detections = await detectAllHarnesses();
     log.dashboard.info({ by: authUser(c).username }, "harness detect-all requested via dashboard");
     return c.json({ ok: true, detections });
+  }
+);
+
+harnessRoutes.get(
+  "/budget-banners",
+  describeRoute({
+    tags: ["Harness"],
+    summary: "Active budget banners",
+    responses: { 200: jsonContent(looseObject, "Banners") },
+  }),
+  (c) => c.json({ banners: budgetBanners() satisfies BudgetStatus[] })
+);
+
+harnessRoutes.post(
+  "/cursor/login",
+  describeRoute({
+    tags: ["Harness"],
+    summary: "Start Cursor CLI browserless login (prints a URL to open elsewhere)",
+    responses: { 200: jsonContent(cursorLoginResponse, "Login started") },
+  }),
+  async (c) => {
+    const result = await startCursorInteractiveLogin();
+    log.dashboard.info(
+      { by: authUser(c).username, alreadyLoggedIn: result.alreadyLoggedIn, hasUrl: Boolean(result.url) },
+      "cursor interactive login started via dashboard"
+    );
+    return c.json(result);
+  }
+);
+
+harnessRoutes.get(
+  "/cursor/login",
+  describeRoute({
+    tags: ["Harness"],
+    summary: "Cursor login session + auth probe status",
+    responses: { 200: jsonContent(cursorLoginStatusResponse, "Login status") },
+  }),
+  async (c) => {
+    const session = getCursorInteractiveLoginState();
+    const auth = await probeCursorAuthStatus();
+    return c.json({
+      session,
+      auth: {
+        loggedIn: auth.loggedIn,
+        account: auth.account,
+        raw: auth.raw.slice(0, 500),
+      },
+    });
+  }
+);
+
+harnessRoutes.delete(
+  "/cursor/login",
+  describeRoute({
+    tags: ["Harness"],
+    summary: "Cancel an in-progress Cursor CLI login",
+    responses: { 200: jsonContent(okBody, "Cancelled") },
+  }),
+  async (c) => {
+    await cancelCursorInteractiveLogin();
+    log.dashboard.info({ by: authUser(c).username }, "cursor interactive login cancelled via dashboard");
+    return c.json({ ok: true as const });
   }
 );
 
@@ -125,14 +200,4 @@ harnessRoutes.put(
     log.dashboard.info({ harness: id, budgets, by: authUser(c).username }, "harness budgets updated via dashboard");
     return c.json({ ok: true as const, budgets });
   }
-);
-
-harnessRoutes.get(
-  "/budget-banners",
-  describeRoute({
-    tags: ["Harness"],
-    summary: "Active budget banners",
-    responses: { 200: jsonContent(looseObject, "Banners") },
-  }),
-  (c) => c.json({ banners: budgetBanners() satisfies BudgetStatus[] })
 );

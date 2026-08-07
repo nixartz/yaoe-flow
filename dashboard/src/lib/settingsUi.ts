@@ -33,18 +33,32 @@ export const UI_CATEGORIES: UiCategory[] = [
   },
 ];
 
+// Keys must match `group` strings in app/src/config/registry.ts (English).
+// Unknown groups fall back to "readonly" — keep this map in sync with the registry.
 const GROUP_TO_CATEGORY: Record<string, string> = {
+  "Bootstrap (ENV only)": "readonly",
+  // Legacy PT group names (pre-English registry pass) — still map correctly if an old cache appears.
   "Bootstrap (somente ENV)": "readonly",
+  Service: "service",
   Serviço: "service",
   Linear: "linear",
+  "GitHub & security": "github",
   "GitHub & segurança": "github",
+  Capacity: "capacity",
   Capacidade: "capacity",
+  "Reliability & merge": "reliability",
   "Confiabilidade & merge": "reliability",
+  "Curation labels": "labels",
   "Labels de curadoria": "labels",
+  "Linear states": "states",
   "Estados do Linear": "states",
   Dashboard: "dashboard",
+  "Agent backend (fallback)": "harness",
   "Backend de agents (legacy)": "harness",
+  "Agent workspaces": "harness",
+  "Harness Goose / OpenRouter": "harness",
   "Harness Goose / OpenRouter (migra pra tela Harness — Fase 2)": "harness",
+  "Harness Hermes": "harness",
   "Harness Hermes (migra pra tela Harness — Fase 2)": "harness",
   "Harness Cursor": "harness",
   "Harness Claude Code": "harness",
@@ -98,6 +112,7 @@ const LABEL_OVERRIDES: Record<string, string> = {
   DASHBOARD_RETENTION_SWEEP_INTERVAL_MS: "Intervalo da limpeza automática",
   DASHBOARD_LOG_BUFFER_SIZE: "Buffer de logs em memória",
   AGENT_BACKEND: "Backend legado de agents",
+  CURSOR_API_KEY: "Chave da API do Cursor (User API Key)",
   CURSOR_ISOLATE_MCP_CONFIG: "Isolar MCPs e git do Cursor por run",
   CURSOR_ATTRIBUTION: "Adicionar atribuição e co-autoria do Cursor nos commits e PRs",
   CLAUDE_CODE_ATTRIBUTION: "Adicionar atribuição e co-autoria do Claude Code nos commits e PRs",

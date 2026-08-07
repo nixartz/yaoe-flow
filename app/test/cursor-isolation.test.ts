@@ -85,6 +85,22 @@ describe("Cursor — HOME isolado não vaza pro host", () => {
     // O que estava em .config fora do `gh` continua acessível.
     expect(existsSync(join(isolated, ".config", "outra-tool"))).toBe(true);
 
+    // Sem API key nos args padrão do prepare (a key entra via buildEnv + --api-key).
+    expect(prep.args).toEqual(["acp"]);
+
+    prep.cleanup?.();
+    rmSync(realHome, { recursive: true, force: true });
+  });
+
+  test("com CURSOR_API_KEY nos args, passa --api-key antes de acp", () => {
+    const realHome = fakeHostHome();
+    const cwd = join(mkdtempSync(join(TEST_TMP_DIR, "run-ws-")), "run-1");
+    mkdirSync(cwd, { recursive: true });
+    const prep = isolatedCursorHome(
+      { runId: "run-1", cwd, settings: {}, env: { HOME: realHome, CURSOR_API_KEY: "key_test" } },
+      { HOME: realHome, CURSOR_API_KEY: "key_test" }
+    );
+    expect(prep.args).toEqual(["--api-key", "key_test", "acp"]);
     prep.cleanup?.();
     rmSync(realHome, { recursive: true, force: true });
   });
