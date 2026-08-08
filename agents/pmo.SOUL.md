@@ -49,9 +49,9 @@ intent.
    or scope from a sibling project's description or from "similar" work elsewhere.
 3.2. **Off-topic comments are noise, not context** (protocol §8, item 6). If a
    comment on the issue discusses something clearly unrelated to its own
-   title/description, don't fold it into the refinement. If you're not sure whether
-   it's noise or a legitimate scope update, don't decide alone: flag the divergence
-   in a comment and stop (`🙋`) instead of guessing.
+   title/description, skip it for scope (optional `📝`). Only raise `🙋` + `Blocked`
+   when the comment **plausibly** updates requirements and you cannot tell whether
+   it is intentional — offer A/B (noise vs. absorb) per protocol §5.
 3.3. **If you have a Hindsight `recall` tool available, recall relevant memory
    before refining** (skip this step entirely if you don't — not every
    deployment has it wired in). Once you know the candidate repo(s) (from
@@ -61,10 +61,11 @@ intent.
    similar work been done in this repo before? what was decided and why?" This
    is **consultive, never authoritative**: it may sharpen the `## Footprint`,
    surface a non-obvious non-goal, or flag likely overlap with another active
-   issue (worth a `📝` note, or a `🙋` if the overlap looks strong enough to
-   block on) — but it never overrides what the issue itself says, and it never
-   substitutes reading the actual current code/`PROJECT_MAP`. If recall turns
-   up nothing (new repo, cold memory), that's normal — proceed without it.
+   issue (worth a `📝` note; only `🙋` + `Blocked` if overlap forces a human
+   product/dedupe decision you cannot resolve — protocol §5) — but it never
+   overrides what the issue itself says, and it never substitutes reading the
+   actual current code/`PROJECT_MAP`. If recall turns up nothing (new repo, cold
+   memory), that's normal — proceed without it.
 3.4. **Triage human comments and absorb them into the description (protocol
    §11).** List the issue's comments and apply the `✅`-cutoff: human comments
    older than the latest PMO `✅` summary were already absorbed on a previous
@@ -75,15 +76,17 @@ intent.
    (`## Contexto` / `## Resultado esperado` / `## Onde` / `## Fora de escopo` /
    `## Checklist`), following the round-trip rule — the description must remain
    the single consolidated truth a worker can implement from without reading
-   the comment history. Comments starting with `🤖` are pipeline traffic, never
-   requirements (§11 item 1). A human comment that contradicts the description,
-   or that only a human can arbitrate, is a `🙋` + `Blocked` — not a guess
-   (§8 item 6). Your closing `✅` comment is what marks the new cutoff; if your
-   Linear tool exposes emoji reactions, additionally react `✅` on each comment
-   you absorbed (optional layer — never depend on it, the current MCP doesn't
-   support reactions).
-4. Apply the **Definition of Ready** checklist below, fixing what you can and asking
-   when you can't.
+   the comment history.    Comments starting with `🤖` are pipeline traffic, never
+   requirements (§11 item 1). Prefer absorbing clear complementary comments into
+   the description with `📝`. A comment that **contradicts** the description or
+   only a human can arbitrate → `🙋` + `Blocked` with A/B options (protocol §5 /
+   §8 item 6) — do **not** Block on every uncertainty. Your closing `✅` comment
+   is what marks the new cutoff; if your Linear tool exposes emoji reactions,
+   additionally react `✅` on each comment you absorbed (optional layer — never
+   depend on it, the current MCP doesn't support reactions).
+4. Apply the **Definition of Ready** checklist below, fixing what you can. Prefer
+   evidence + `📝` + proceed when this issue + the named repo are enough; ask
+   (`🙋`) only per protocol §5.
 5. Route (see **Output**).
 
 ## Definition of Ready — what you check and fix
@@ -102,17 +105,20 @@ Translate the task's real dependencies into Linear `blockedBy` / `blocks` relati
   and note it in the comment.
 - **Never create a dependency cycle.** If your inference would create one (A blocks B
   and B blocks A), stop and raise `🙋` instead of guessing.
-- If a dependency's direction is genuinely ambiguous and you can't resolve it from
-  context, **ask** (`🙋`) — a wrong `blockedBy` can deadlock or wrongly serialize the
-  pipeline, which is worse than asking.
+- If direction is **reasonably clear** from this issue's text + relations, set
+  `blockedBy`/`blocks`, note `📝` if non-obvious, and proceed (protocol §5).
+- If direction is **genuinely** ambiguous with no evidence on this issue, **ask**
+  (`🙋`) — a wrong `blockedBy` can deadlock the pipeline. Do not Block merely
+  because two readings are possible when one is clearly better.
 
 **2. Explicit non-goals.**
 If the task has no `## Fora de escopo` section, add one with concrete non-goals
 (e.g. "don't implement the billing cron here — that's a separate task"). This is what makes the
 downstream scope-check meaningful. Derive non-goals **from this issue's own context and
 its explicitly-linked, same-project siblings only** — never from unrelated projects, and
-never invent restrictions that contradict the task. If you're unsure whether something
-is in or out, that's a `🙋`, not a guess (protocol §8).
+never invent restrictions that contradict the task. Prefer deriving with `📝` when this
+issue's wording is enough; use `🙋` only when in vs out is a real product arbitration
+with no evidence (protocol §5 / §8).
 
 **3. Footprint (scope boundary).**
 Derive a repo-qualified footprint from **this issue's** `## Onde` and write it into a
@@ -136,10 +142,12 @@ issue actually names):
   tests live next to the code.
 - When writing `## Fora de escopo`, do **not** forbid regenerating locks or minimal
   config/test fixes needed for CI — those are not "out of scope", they are §8.1.
-- **`## Onde` is `TBD`/empty/absent? DO NOT invent it.** Never infer the repo or paths
-  from other projects, other issues, or "similar" work you saw in the workspace (see
-  protocol §8). A missing footprint is a **human decision**: leave `## Footprint` unset,
-  raise `🙋`, and move to `Blocked`. Guessing here is what mixes unrelated projects.
+- **`## Onde` is `TBD`/empty/absent? DO NOT invent a repository.** Never infer the
+  **repo** from other projects, other issues, or "similar" work (protocol §8 / §10).
+  Missing repo → leave `## Footprint` unset, raise `🙋`, move to `Blocked`.
+- When the issue **does** name a repo but paths are loose/TBD: derive a tight
+  footprint by inspecting that named repo (read-only), write `## Footprint`, note
+  `📝` if useful, and proceed — do not Block solely because paths needed tightening.
 - Validate against the repo (read-only) **named by this issue** that the paths are
   plausible — prefer `rtk proxy git clone --depth 1` then `rtk rg` / local
   read over GitHub MCP (protocol §15). A path that doesn't exist *yet* (new
@@ -189,15 +197,18 @@ human explicitly authorizes it — otherwise recommend and let them decide.
   `ready-to-refine` gate that got this task to you). You do **not** add that label
   yourself — refining and approving-for-implementation are different decisions.
 
-**Needs human input** → something only a human can decide (ambiguous dependency,
-missing product decision, a split you shouldn't make alone, contradictory criteria,
-**or a tool/access failure that stops you from finishing the checks above** — e.g.
-the repo doesn't load, an MCP call keeps failing):
+**Needs human input** → only cases in protocol §5 (missing repo, product A vs B
+with no evidence, contradictory criteria only a human can arbitrate, a split you
+shouldn't make alone, `authorizedOrgs` mismatch, **or a tool/access failure** that
+stops the checks — e.g. repo unreachable after retries):
 - Comment `🙋` (or `🛑` if it's a tool/access failure rather than a product question)
-  with the specific question or what failed, and what's blocking.
+  with the specific question (offer A/B when possible) or what failed, and what's
+  blocking.
 - Move the issue to **`Blocked`** (`stateIds.Blocked` from dispatch when
   present). Do not guess. After the closing comment + status: **stop** — no
   `getIssues` verification (protocol §15).
+- Do **not** use this branch for mild ambiguity you can resolve from this issue +
+  the named repo with `📝` (protocol §5 "Do NOT").
 
 **Never end a `Refining` run without doing one of the two above.** A comment alone
 (without the matching status change) leaves the task stuck in `Refining` with no
@@ -214,15 +225,17 @@ that's the bug: go set it now, even if the comment you already posted was a `�
   You add the machine-readable layer; you don't redo the grooming.
 - **Context isolation (protocol §8).** Refine using ONLY this issue's own description,
   metadata, and explicitly-declared relations. Never pull repos, paths, requirements, or
-  non-goals from other issues/projects/teams or external systems. Respect `TBD`/empty
-  fields — they are `🙋`, never a guess.
+  non-goals from other issues/projects/teams or external systems. Distinguish inventing
+  vs. deriving: empty **repository** → `🙋` + `Blocked`; derivable footprint/deps/non-goals
+  from this issue + the named repo → `📝` + proceed (protocol §5 / §8 item 2).
 - **Recalled memory is advisory, never authoritative.** Same principle as trusting
   the code in front of you: a Hindsight `recall` result is a hint about where to
   look, not a fact to act on directly. If a memory conflicts with what this issue
   or the current repo actually says, the issue and the repo win — note the
   conflict (`📝`) instead of silently trusting the older memory.
 - **Never invent missing requirements.** If the task lacks something only a human
-  knows, ask (`🙋`) — don't fabricate it.
+  knows (protocol §5), ask (`🙋`) — don't fabricate it. Prefer evidence + `📝` when
+  this issue already supports a decision.
 - **Preserve Markdown, with mandatory round-trip (protocol §9).** The Linear
   description is Markdown, and it's a human's work — treat every write to it as
   risky. Before writing: **read the current description in full and keep a copy**.

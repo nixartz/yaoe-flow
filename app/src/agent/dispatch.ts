@@ -3,7 +3,6 @@
 // + config do harness ativo, chama o HarnessAdapter correspondente e persiste
 // snapshot/usage/refs externas. O scheduler continua vendo só as funções
 // re-exportadas por agent/index.ts (AgentBackend) — invariante §3.2 preservada.
-import { join } from "node:path";
 import { config } from "../config";
 import { log, agentLog, errFields } from "../logger";
 import * as store from "../dashboard/store";
@@ -22,6 +21,7 @@ import { isHarnessPaused } from "./harness/budget";
 import type { HarnessId, HarnessRunInput } from "./harness/types";
 import { extractFootprint } from "./backend";
 import { withGitCommitterIdentity, withGitHttpsInsteadOf } from "./harness/gitRunEnv";
+import { resolveDispatchCwd } from "./workspace";
 import type { Footprint, WorkerMode } from "../types";
 import { notify } from "../notifications/events";
 import type { LinearContext } from "../db/linearConnections";
@@ -32,7 +32,7 @@ import { ensureHarnessBinOnPath } from "../cli/setup/harnessDeps";
 // Registro em memória dos runs em voo (qualquer harness) — permite à
 // dashboard encerrar manualmente (cancelRun). Só funciona com uma instância
 // do serviço (mesma limitação documentada pro guard `running` do scheduler).
-const activeRuns = new Map<string, { kill(): void }>();
+const activeRuns = new Map<string, { kill(): void; cwd: string; issueId?: string }>();
 
 export function cancelActiveRun(runId: string): boolean {
   const run = activeRuns.get(runId);
@@ -43,6 +43,29 @@ export function cancelActiveRun(runId: string): boolean {
     /* já morto */
   }
   return true;
+}
+
+/** Absolute cwds of in-flight dispatches — used to spare live ephemeral run-* dirs. */
+export function activeDispatchCwds(): Set<string> {
+  return new Set([...activeRuns.values()].map((r) => r.cwd));
+}
+
+/** True if a harness process for this issue is still in the in-memory map. */
+export function hasActiveDispatchForIssue(issueId: string, exceptRunId?: string): boolean {
+  for (const [id, run] of activeRuns) {
+    if (exceptRunId && id === exceptRunId) continue;
+    if (run.issueId === issueId) return true;
+  }
+  return false;
+}
+
+export function listActiveRunIdsForIssue(issueId: string, exceptRunId?: string): string[] {
+  const out: string[] = [];
+  for (const [id, run] of activeRuns) {
+    if (exceptRunId && id === exceptRunId) continue;
+    if (run.issueId === issueId) out.push(id);
+  }
+  return out;
 }
 
 export class HarnessNotReadyError extends Error {}
@@ -81,12 +104,6 @@ function resolveForRole(role: SchedulerRole): Resolution {
     settings: decryptSecretFields(parseHarnessSettings(harnessConfig)),
     mcpServers: parseMcpServers(harnessConfig),
   };
-}
-
-function harnessWorkspaceRoot(): string {
-  // Reaproveita o mesmo diretório-base que já existia só para o Goose — vira
-  // a raiz de workspace de QUALQUER harness que precise de cwd (§7.1).
-  return config.goose.workingDir;
 }
 
 export interface DispatchOptions {
@@ -193,7 +210,11 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
   });
   store.recordEvent(runId, "user_message", { text: opts.promptText, payload: { text: opts.promptText } });
 
-  const cwd = join(harnessWorkspaceRoot(), `run-${runId}`);
+  const cwd = resolveDispatchCwd({
+    issueId: opts.issueId,
+    runId,
+    connectionId,
+  });
 
   // §7.6: session resume — só em modo fix, só se o harness ativo suporta, só
   // DA MESMA issue NO MESMO harness (chave composta). Fallback transparente:
@@ -226,14 +247,18 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
     env: runEnv,
     resumeSessionId,
     onEvent(evt) {
+      // Sibling cancel / Blocked webhook may have marked this run failed while
+      // the process is still alive — restore "running" so the dashboard matches reality.
+      store.reviveRunIfStillActive(runId);
       store.recordEvent(runId, evt.kind, { text: evt.text, toolName: evt.toolName, toolStatus: evt.toolStatus, payload: evt.payload });
     },
   };
 
   const run = adapter.createRun(input);
-  activeRuns.set(runId, run);
+  activeRuns.set(runId, { kill: () => run.kill(), cwd, issueId: opts.issueId });
   const start = Date.now();
   const runLog = agentLog({ harness: resolution.harnessId, runId, role: opts.role });
+  runLog.info({ cwd, issueId: opts.issueId, connectionId }, "dispatch workspace resolved");
 
   try {
     const result = await run.result;

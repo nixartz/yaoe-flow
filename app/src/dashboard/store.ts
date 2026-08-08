@@ -882,10 +882,65 @@ export function findOpenRun(issueId: string, role?: string) {
     .get(params) as { id: string } | undefined;
 }
 
+/** All open runs for an issue (duplicate-dispatch detection / stop safety). */
+export function listOpenRuns(issueId: string, role?: string): { id: string; role: string }[] {
+  const clauses = ["issue_id = $issueId", "status IN ('running','dispatched')"];
+  const params: Record<string, string> = { $issueId: issueId };
+  if (role) {
+    clauses.push("role = $role");
+    params.$role = role;
+  }
+  return db()
+    .query(`SELECT id, role FROM runs WHERE ${clauses.join(" AND ")} ORDER BY started_at DESC`)
+    .all(params) as { id: string; role: string }[];
+}
+
 export function closeOpenRun(issueId: string, role: string | undefined, status: RunStatus, note?: string): void {
   const open = findOpenRun(issueId, role);
   if (!open) return;
   finishRun(open.id, { status, error: note });
+}
+
+/**
+ * Close every open run for the issue, optionally skipping live process ids
+ * (Blocked while a twin dispatch is still executing must not mark it failed).
+ */
+export function closeOpenRuns(
+  issueId: string,
+  status: RunStatus,
+  note?: string,
+  opts?: { role?: string; exceptRunIds?: ReadonlySet<string> | string[] }
+): void {
+  const except = opts?.exceptRunIds
+    ? opts.exceptRunIds instanceof Set
+      ? opts.exceptRunIds
+      : new Set(opts.exceptRunIds)
+    : null;
+  for (const row of listOpenRuns(issueId, opts?.role)) {
+    if (except?.has(row.id)) continue;
+    finishRun(row.id, { status, error: note });
+  }
+}
+
+/**
+ * If a live harness process is still emitting events but the row was closed
+ * (typically sibling stop → Linear Blocked → closeOpenRun), restore running.
+ * Does **not** revive intentional `cancelled` or successful `completed`.
+ */
+export function reviveRunIfStillActive(runId: string): void {
+  safe("reviveRunIfStillActive", () => {
+    const res = db()
+      .query(
+        `UPDATE runs SET status = 'running', stop_reason = NULL, error_message = NULL,
+                ended_at = NULL, duration_ms = NULL
+         WHERE id = $id AND status IN ('failed','timeout')`
+      )
+      .run({ $id: runId });
+    if (res.changes > 0) {
+      log.dashboard.info({ runId }, "run revived to running (events still arriving after premature close)");
+      emitRun({ type: "run_updated", runId, status: "running", revived: true });
+    }
+  });
 }
 
 // Sinal de vida do run aberto da issue, para o reclaimStale distinguir "agent

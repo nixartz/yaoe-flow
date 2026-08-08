@@ -79,8 +79,42 @@ gets whatever is code-specific.
 
 ## 5. "Need help" flow (🙋)
 
-When information or a decision that **only a human** can give is missing, the
-agent **does not guess**. It:
+Use `🙋` → **`Blocked`** only when a **human product or safety decision** is
+required — not whenever something is uncertain. Prefer deciding with evidence
+from **this** issue + the named repo, document with `📝`, and proceed.
+
+**Do raise `🙋` + `Blocked` when:**
+
+1. The repository / `## Onde` is missing or empty (you must not invent a repo —
+   §10), or it falls outside `authorizedOrgs` when that list is present.
+2. Acceptance criteria or product requirements are **contradictory** (A vs B)
+   and both readings are plausible from this issue alone.
+3. You would need to implement **large** feature/module work clearly outside
+   the declared footprint (new screens/services/broad refactors elsewhere) —
+   not ancillary paths (§8.1) and not a trivial adjacent import/type.
+4. A Pending Merge PR already implements **essentially the same** change and
+   you cannot tell whether to cancel/dedupe this task or add a small missing
+   piece (human must choose).
+5. An explicit human gate is set (`needs-approval` label or **Urgent** priority
+   plan-gate in the Dev SOUL).
+6. A tool/access failure permanently stops you (credentials, repo unreachable
+   after retries) — use `🛑` + `Blocked` rather than inventing a workaround.
+
+**Do NOT raise `🙋` + `Blocked` when you can decide and continue:**
+
+1. Dependency direction is reasonably clear from this issue's text + relations —
+   set `blockedBy`/`blocks`, note `📝` if non-obvious, proceed.
+2. Footprint paths can be tightened by inspecting the **named** repo (read-only)
+   without inventing another project — write `## Footprint`, proceed.
+3. Overlap with a Pending Merge PR is **complementary** — use a stacked branch
+   (Dev SOUL), note `📝`, proceed.
+4. Ancillary or trivial-adjacent touches (§8.1 / Dev SOUL) — note `📝`, proceed.
+5. An off-topic or noisy comment — ignore it for scope, optionally `📝` that you
+   skipped it; do **not** Block solely because of noise.
+6. Ambiguity that the **named repo's existing conventions** already resolve
+   (follow the codebase, note `📝`).
+
+When you **do** need help, the agent **does not guess**. It:
 
 1. Posts a 🙋 comment on Linear (and on the PR, if it's about code) containing:
    - The **context** (what you were doing).
@@ -93,6 +127,9 @@ When the human answers in the comments and moves the issue back to
 **`Reopened`**, the pipeline reabsorbs the task (re-dispatched in fix mode, with
 the branch and context already in place).
 
+> Scheduler footprint locks / unmet Linear deps are **not** this flow: they only
+> delay dispatch (readiness). Do not move to `Blocked` merely because another
+> issue still holds a colliding lock — wait for the orchestrator to pick you up.
 ## 6. Comment body (structure)
 
 ```
@@ -144,37 +181,38 @@ systems.
    systems (Asana, Notion, another workspace) — unless **this** issue explicitly
    references them (a `blockedBy`/`blocks`/`relatedTo` relation, or an inline
    `<issue>` reference **in this** issue).
-2. **Respect `TBD` / empty fields.** A field marked `TBD`, `?`, empty, or ambiguous
-   (e.g. `## Onde`, `## Footprint`, an acceptance criterion) is **not an invitation
-   to guess**. Don't fill it in by speculation or by analogy with other projects —
-   leave it as is and flag `🙋` (→ `Blocked`). Guessing here is worse than asking.
+2. **Respect `TBD` / empty fields — but distinguish inventing vs. deriving.**
+   - **Must not invent** (→ `🙋` + `Blocked` if truly empty): repository / `## Onde`
+     when no repo is named (§10), or product A vs B with no evidence on this issue.
+   - **May derive with evidence + `📝`:** footprint paths and dependency *direction*
+     from this issue's text + inspecting the **named** repo; non-goals implied by
+     the task wording. Do not copy paths/repos from unrelated projects.
 3. **A relation ≠ importing scope.** Reading a related issue (via a relation
    declared on this issue) is only for establishing **dependency/direction** —
    never for copying its repos, paths, or requirements into this task.
 4. **No "similarity" searches.** Don't sweep the workspace for tasks that "look
    similar" and assume relevance. Textual similarity is not a link.
-5. **When unsure whether something belongs, ask.** If you can't determine
-   something from **this** issue's own context, it's `🙋` + `Blocked` — don't
-   infer from outside.
-6. **An off-topic comment is noise, not context.** If a comment on the issue talks
-   about something clearly different from its own title/description (e.g. the
-   issue is about a CRM and a comment discusses a different system/project), it
-   **probably isn't related** — don't fold it into your work on your own. If
-   you're not sure whether it's noise or a legitimate scope update, **don't decide
-   alone**: flag the divergence in a comment (what you read, why it stood out) and
-   **abort the change in progress**, going to `🙋` + `Blocked` until a human
-   clarifies.
-7. **When something looks off, abort — always.** Any sign that the context
-   doesn't match what's expected (a disconnected comment, a footprint/repository
-   that doesn't make sense, a contradictory requirement, a change that's "too big"
-   for what the task asks) is reason to **stop** and go to `Blocked` — never push
-   forward hoping it works out. Asking is free; undoing bad code or a wrong
-   analysis is not.
+5. **Decide when this issue + the named repo are enough; ask only for human
+   arbitration.** If you can determine the answer from **this** issue's own
+   context (and, for code layout, the repo it already names), prefer `📝` +
+   proceed. Use `🙋` + `Blocked` only per §5 — not for every uncertainty.
+6. **An off-topic comment is noise, not context.** If a comment talks about
+   something clearly different from the issue's title/description, **ignore it for
+   scope** (optional `📝` that you skipped it). Only raise `🙋` + `Blocked` when
+   the comment **plausibly** updates scope/requirements and you cannot tell
+   whether it is intentional (offer A/B: treat as noise vs. absorb).
+7. **When evidence says stop, stop; when evidence says proceed, proceed.** Signs
+   that you are in the **wrong repo**, outside `authorizedOrgs`, or about to ship
+   **large** out-of-footprint feature work → abort (`🛑`/`🙋` + `Blocked`). Mild
+   ambiguity, noisy comments, or "this might be slightly bigger than ideal" →
+   tighten scope, note `📝`, continue — do not Block by default. Asking is still
+   right when §5 applies; undoing a wrong *project* is expensive — undoing a
+   cautious in-repo judgment is cheap.
 
 > Leaking context between projects mixes subjects, produces a wrong footprint, and
 > can make the worker implement something that doesn't make sense. **Restricted
-> scope is a rule, not a suggestion.**
-
+> scope is a rule, not a suggestion.** Autonomously resolving *within* that
+> restricted scope (with `📝`) is expected.
 ### 8.1 Ancillary paths — footprint exceptions (not automatic rejection)
 
 The footprint is the privilege ceiling for **feature / module code**. Some paths
@@ -309,9 +347,12 @@ treating a comment as requirements:
    comments **after** the latest PMO `✅` (or all of them, when no `✅` exists
    yet) are NEW input:
    - **PMO**: absorb them on the next refinement pass, per its SOUL.
-   - **Dev / Reviewer**: read them as context; if such a comment
-     changes scope or contradicts the description, that is NOT a license to
-     exceed the footprint — raise `🙋` (→ `Blocked`) per §8.
+   - **Dev / Reviewer**: read them as context. If such a comment clearly
+     complements the description without changing footprint, absorb it into your
+     plan with `📝`. If it **contradicts** the description or would expand
+     footprint into large out-of-scope feature work, follow §5 (offer A/B; Block
+     only when you cannot decide). Do **not** treat every new comment as an
+     automatic `🙋`.
 4. **Reactions are an optional extra layer, never the mechanism.** If your
    Linear tool exposes emoji reactions, a `✅` reaction on a comment also means
    "absorbed", and you may add one to each comment you absorb. But never DEPEND

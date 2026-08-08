@@ -10,8 +10,6 @@ import {
   IconDownload,
   IconRotate,
   IconTrash,
-  IconChevronDown,
-  IconChevronRight,
 } from "@tabler/icons-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -449,7 +447,6 @@ function HarnessTab({
   const [settingsJson, setSettingsJson] = useState(config?.settingsJson ?? "{}");
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
-  const [advanced, setAdvanced] = useState(false);
   const [confirmActivate, setConfirmActivate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -553,16 +550,8 @@ function HarnessTab({
               setSettingsJson(j);
               setOk(false);
             })}
-            <button
-              type="button"
-              className="flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-              onClick={() => setAdvanced((a) => !a)}
-              aria-expanded={advanced}
-            >
-              {advanced ? <IconChevronDown className="size-3.5" /> : <IconChevronRight className="size-3.5" />}
-              JSON avançado
-            </button>
-            {advanced && (
+            <div className="flex flex-col gap-2 border-t pt-3">
+              <span className="text-xs font-medium text-muted-foreground">JSON avançado</span>
               <JsonEditor
                 value={settingsJson}
                 onChange={(v) => {
@@ -571,7 +560,7 @@ function HarnessTab({
                 }}
                 minHeightClass="min-h-32"
               />
-            )}
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2 border-t pt-3">

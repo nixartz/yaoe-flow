@@ -17,6 +17,14 @@
 //   adquirido ao mover Planned → In Progress  (libera o "seat" de footprint)
 //   liberado  ao chegar em Completed          (o código já está na main)
 //   sobrevive aos ciclos Code Review ⇄ Reopened (a branch continua existindo)
+//   Blocked mantém o lock até um humano resolver
+//   Self-heal: reconcileStaleLocks() no tick libera locks cujo estado Linear
+//   já saiu do conjunto lock-holding (webhook de Completed perdido, etc.)
+//
+// Ciclo de vida do workspace em disco (issue-<id>):
+//   criado no primeiro dispatch da issue (qualquer harness)
+//   reutilizado até Completed (inclui Planned/Refining/Blocked/Reopened)
+//   removido no webhook Completed + reconcileStaleWorkspaces() no tick
 //
 // Multi-Linear: cada tick itera sequencialmente sobre todos os contextos
 // ativos (connections enabled ou fallback single-tenant). Locks, dispatches e
@@ -28,7 +36,14 @@
 // ─────────────────────────────────────────────────────────────────────────
 import { config } from "./config";
 import { log, errFields } from "./logger";
-import { linearFor, type LinearClient } from "./linear";
+import {
+  linearFor,
+  isLinearRateLimitError,
+  shouldSkipTickForRateBudget,
+  linearRateLimitCooldownMs,
+  linearRateLimitSnapshot,
+  type LinearClient,
+} from "./linear";
 import type { LinearContext } from "./db/linearConnections";
 import { resolveActiveContexts } from "./db/linearConnections";
 import { resolveGithubAccessToken } from "./githubAuth";
@@ -41,6 +56,13 @@ import { filesOutsideFootprint } from "./scope";
 import { notify } from "./notifications/events";
 import { budgetBanners, isActiveHarnessPausedForRole } from "./agent/harness/budget";
 import { refreshReadinessSnapshot } from "./readiness";
+import {
+  listIssueWorkspaceIssueIds,
+  removeIssueWorkspace,
+  removeOrphanEphemeralRunDirs,
+  workspaceHoldingStates,
+  issueWorkspaceCwd,
+} from "./agent/workspace";
 import type { Footprint } from "./types";
 
 const S = config.states;
@@ -53,6 +75,18 @@ const S = config.states;
 // label/assignee (ou duplicata) com stateName=Pending Merge fechava o run
 // do merge em ~2s enquanto o agent continuava executando.
 const OCCUPIED_STATES = new Set<string>([S.refining, S.inProgress, S.inReview, S.pendingMerge]);
+
+/** States that may legitimately hold a Valkey footprint lock. */
+function lockHoldingStates(): Set<string> {
+  return new Set([
+    S.inProgress,
+    S.codeReview,
+    S.inReview,
+    S.reopened,
+    S.pendingMerge,
+    S.blocked, // documented: keeps lock until a human resolves it
+  ]);
+}
 
 function svcHeader(phase: string): string {
   const now = new Date().toISOString().slice(0, 16).replace("T", " ");
@@ -114,13 +148,22 @@ async function assignToConnectionViewer(lin: LinearClient, issueId: string, ctx:
 // e move a issue de volta pra Reopened — o worker pega o branch já existente
 // em modo `fix`. Idempotente e seguro chamar mesmo se a issue não estiver de
 // fato numa fase ocupada (vira só um comentário + no-op nos locks).
-export async function manualStopRun(issueId: string, reason: string, ctx?: LinearContext): Promise<void> {
+//
+// Se ainda houver OUTRO processo/run vivo na mesma issue (duplicate-dispatch),
+// NÃO move pra Blocked — isso fechava a irmã como "failed" via webhook enquanto
+// o agent continuava executando.
+export async function manualStopRun(
+  issueId: string,
+  reason: string,
+  ctx?: LinearContext,
+  opts?: { exceptRunId?: string }
+): Promise<{ movedToBlocked: boolean }> {
   if (!ctx) {
     const ctxs = resolveActiveContexts();
     ctx = ctxs[0];
     if (!ctx) {
       log.scheduler.error({ issueId, reason }, "manualStopRun: no active Linear context — operation aborted");
-      return;
+      return { movedToBlocked: false };
     }
     if (ctxs.length > 1) {
       log.scheduler.warn(
@@ -131,6 +174,27 @@ export async function manualStopRun(issueId: string, reason: string, ctx?: Linea
   }
   const lin = linearFor(ctx);
   log.scheduler.warn({ issueId, reason, connectionId: ctx.connectionId }, "manual stop requested via dashboard");
+
+  const liveSiblings = agent.listActiveRunIdsForIssue(issueId, opts?.exceptRunId);
+  const openSiblings = store
+    .listOpenRuns(issueId)
+    .filter((r) => r.id !== opts?.exceptRunId)
+    .map((r) => r.id);
+  const stillBusy = liveSiblings.length > 0 || openSiblings.length > 0;
+
+  if (stillBusy) {
+    const siblingIds = [...new Set([...liveSiblings, ...openSiblings])];
+    await lin.comment(
+      issueId,
+      `${svcHeader("Reliability")}\n\n🛑 Uma execução foi interrompida manualmente via dashboard.\n\n${reason}\n\n**Não** movendo para Blocked: ainda há run(s) ativa(s) nesta issue (\`${siblingIds.join("`, `")}\`). Aguarde concluir ou encerre as demais runs antes de bloquear.`
+    );
+    log.scheduler.warn(
+      { issueId, siblingIds, connectionId: ctx.connectionId },
+      "manual stop: sibling run still active — skipping Blocked transition"
+    );
+    return { movedToBlocked: false };
+  }
+
   await lin.comment(
     issueId,
     `${svcHeader("Reliability")}\n\n🛑 Execução interrompida manualmente via dashboard.\n\n${reason}\n\nMovendo para Blocked. Revise e mova para Reopened para retomar — o worker pega o branch já existente em modo de correção.`
@@ -142,6 +206,7 @@ export async function manualStopRun(issueId: string, reason: string, ctx?: Linea
   await locks.clearMergingIf(ctx.connectionId, issueId);
   await locks.clearAttempts(ctx.connectionId, issueId);
   await locks.clearStarted(ctx.connectionId, issueId);
+  return { movedToBlocked: true };
 }
 
 // ── Entrada por webhook ──
@@ -173,12 +238,28 @@ export async function onStatusChange(issueId: string, stateName: string, ctx: Li
       `Closed by a status transition in Linear (→ ${stateName})`
     );
   } else if (!OCCUPIED_STATES.has(stateName)) {
-    store.closeOpenRun(
-      issueId,
-      undefined,
-      stateName === S.blocked ? "failed" : "completed",
-      `Closed by a status transition in Linear (→ ${stateName})`
-    );
+    const liveIds = agent.listActiveRunIdsForIssue(issueId);
+    if (stateName === S.blocked && liveIds.length > 0) {
+      // Human/manual Blocked while a twin (or slow) agent is still running:
+      // close only dead open rows; leave live processes alone (they revive via
+      // reviveRunIfStillActive if a race already marked them failed).
+      log.scheduler.warn(
+        { issueId, liveIds, connectionId: ctx.connectionId },
+        "Blocked while dispatch still active — not closing live runs"
+      );
+      store.closeOpenRuns(
+        issueId,
+        "failed",
+        `Closed by a status transition in Linear (→ ${stateName})`,
+        { exceptRunIds: liveIds }
+      );
+    } else {
+      store.closeOpenRuns(
+        issueId,
+        stateName === S.blocked ? "failed" : "completed",
+        `Closed by a status transition in Linear (→ ${stateName})`
+      );
+    }
   }
 
   if (stateName === S.completed) {
@@ -188,6 +269,16 @@ export async function onStatusChange(issueId: string, stateName: string, ctx: Li
     await locks.clearMergingIf(ctx.connectionId, issueId);
     await locks.clearAttempts(ctx.connectionId, issueId);
     await locks.clearStarted(ctx.connectionId, issueId);
+    // Do not rm -rf under a still-running merge/agent — tick reconcile cleans up after.
+    const busyCwd = issueWorkspaceCwd(issueId, ctx.connectionId);
+    if (agent.activeDispatchCwds().has(busyCwd)) {
+      log.scheduler.info(
+        { issueId, connectionId: ctx.connectionId, cwd: busyCwd },
+        "issue completed but dispatch still active — deferring workspace removal"
+      );
+    } else {
+      removeIssueWorkspace(issueId, ctx.connectionId);
+    }
   } else if (stateName === S.reopened) {
     log.scheduler.info({ issueId, connectionId: ctx.connectionId }, "issue reopened — clearing merge mutex if held");
     await locks.clearMergingIf(ctx.connectionId, issueId);
@@ -246,8 +337,32 @@ export async function tick(): Promise<void> {
       log.scheduler.info("tick: nenhum contexto Linear ativo — nada a reconciliar");
       return;
     }
+    // Disk-only: orphan run-* leftovers (crashes / pre-migration). Independent of
+    // Linear rate limits — do not nest under a connection that may be skipped.
+    {
+      const swept = removeOrphanEphemeralRunDirs(agent.activeDispatchCwds());
+      if (swept > 0) {
+        log.scheduler.info({ removed: swept }, "orphan ephemeral run-* workspaces swept");
+      }
+    }
     for (const ctx of contexts) {
       const connStart = Date.now();
+      const cooldownMs = linearRateLimitCooldownMs(ctx.apiKey);
+      const budget = linearRateLimitSnapshot(ctx.apiKey);
+      if (shouldSkipTickForRateBudget(ctx.apiKey)) {
+        log.scheduler.warn(
+          {
+            connectionId: ctx.connectionId,
+            connectionName: ctx.name,
+            cooldownMs,
+            remaining: budget.remaining,
+            limit: budget.limit,
+            resetAtMs: budget.resetAtMs,
+          },
+          "tick: skipping Linear connection — rate limit cooldown or request budget too low"
+        );
+        continue;
+      }
       log.scheduler.info(
         {
           connectionId: ctx.connectionId,
@@ -258,6 +373,12 @@ export async function tick(): Promise<void> {
         "tick: reconciling Linear connection"
       );
       try {
+        const lin = linearFor(ctx);
+        lin.beginTickCache();
+        // Self-heal missed Completed webhooks BEFORE fillWorkers, otherwise
+        // Planned candidates stay blocked by zombie locks forever.
+        await reconcileStaleLocks(ctx);
+        await reconcileStaleWorkspaces(ctx);
         await fillRefiners(ctx);
         await fillWorkers(ctx);
         await fillReviewers(ctx);
@@ -269,20 +390,38 @@ export async function tick(): Promise<void> {
             connectionId: ctx.connectionId,
             connectionName: ctx.name,
             durationMs: Date.now() - connStart,
+            linearRemaining: linearRateLimitSnapshot(ctx.apiKey).remaining,
           },
           "tick: connection reconciled"
         );
       } catch (e) {
-        // Isola falha por connection: um 503 do Linear numa org não pode matar
-        // o fillWorkers da outra (antes o throw abortava o tick inteiro).
-        log.scheduler.error(
-          { connectionId: ctx.connectionId, connectionName: ctx.name, ...errFields(e) },
-          "tick: falha ao reconciliar connection — seguindo para as demais"
-        );
+        if (isLinearRateLimitError(e)) {
+          log.scheduler.warn(
+            {
+              connectionId: ctx.connectionId,
+              connectionName: ctx.name,
+              resetAtMs: e.resetAtMs,
+              remaining: e.remaining,
+              limit: e.limit,
+              cooldownMs: Math.max(0, e.resetAtMs - Date.now()),
+            },
+            "tick: Linear rate limited — cooling down this connection until reset"
+          );
+        } else {
+          // Isola falha por connection: um 503 do Linear numa org não pode matar
+          // o fillWorkers da outra (antes o throw abortava o tick inteiro).
+          log.scheduler.error(
+            { connectionId: ctx.connectionId, connectionName: ctx.name, ...errFields(e) },
+            "tick: falha ao reconciliar connection — seguindo para as demais"
+          );
+        }
       }
       // Snapshot mesmo após falha parcial: a dashboard precisa de alguma visão.
       // Best-effort interno (refreshReadinessSnapshot não propaga throw).
-      await refreshReadinessSnapshot(ctx);
+      // Skip when still rate-limited — readiness alone is ~10 listByState calls.
+      if (!shouldSkipTickForRateBudget(ctx.apiKey)) {
+        await refreshReadinessSnapshot(ctx);
+      }
     }
     checkBudgetBanners();
     log.scheduler.info({ durationMs: Date.now() - start, connectionCount: contexts.length }, "tick completed");
@@ -424,6 +563,15 @@ async function tryDispatchImpl(ctx: LinearContext, issueId: string, stateName: s
     return "skipped";
   }
 
+  // Hard exclusivity: never start a second Dev (or Orchestrator estimate) while
+  // one is already in flight for this issue — covers webhook/tick races that
+  // the Valkey lock alone used to miss (estimateThenDispatch runs outside the
+  // tick mutex).
+  if (store.findOpenRun(issueId, "dev") || agent.hasActiveDispatchForIssue(issueId)) {
+    log.scheduler.debug({ issueId, connectionId: ctx.connectionId }, "dev dispatch skipped: issue already has an active run");
+    return "skipped";
+  }
+
   if (await locks.hasLock(ctx.connectionId, issueId)) {
     // Lock vivo + Planned é estado inconsistente: o lock só deveria coexistir
     // com o ciclo In Progress⇄Code Review⇄Reopened. Acontece quando a issue
@@ -489,6 +637,25 @@ async function tryDispatchImpl(ctx: LinearContext, issueId: string, stateName: s
 
   let footprint = await locks.getFootprint(ctx.connectionId, issueId);
   if (!footprint) {
+    // Dedup: without a reservation, every tick/webhook while Planned re-fired
+    // estimateThenDispatch → multiple Orchestrator runs, then twin Dev commits.
+    if (
+      (await locks.isEstimating(ctx.connectionId, issueId)) ||
+      store.findOpenRun(issueId, "orchestrator")
+    ) {
+      log.scheduler.debug(
+        { issueId, connectionId: ctx.connectionId },
+        "dev dispatch skipped: footprint estimate already in flight"
+      );
+      return "skipped";
+    }
+    if (!(await locks.tryBeginEstimate(ctx.connectionId, issueId))) {
+      log.scheduler.debug(
+        { issueId, connectionId: ctx.connectionId },
+        "dev dispatch skipped: lost estimate reservation race"
+      );
+      return "skipped";
+    }
     // NÃO awaita o Orchestrator aqui — segurava `running` do tick por dezenas
     // de segundos e os webhooks seguintes viravam "tick skipped".
     log.scheduler.info(
@@ -507,52 +674,64 @@ async function tryDispatchImpl(ctx: LinearContext, issueId: string, stateName: s
  * pode ter mudado enquanto o Orchestrator estimava.
  */
 async function estimateThenDispatch(ctx: LinearContext, issueId: string, expectedState: string): Promise<void> {
-  const footprint = await agent.estimateFootprint(issueId, ctx);
-  await locks.setFootprint(ctx.connectionId, issueId, footprint);
+  try {
+    const footprint = await agent.estimateFootprint(issueId, ctx);
+    await locks.setFootprint(ctx.connectionId, issueId, footprint);
 
-  const lin = linearFor(ctx);
-  const issue = await lin.getIssue(issueId);
-  if (issue.stateName !== S.planned && issue.stateName !== S.reopened) {
-    log.scheduler.info(
-      { issueId, stateName: issue.stateName, expectedState, connectionId: ctx.connectionId },
-      "estimate done but issue left Planned/Reopened — abort dispatch"
-    );
-    return;
+    const lin = linearFor(ctx);
+    const issue = await lin.getIssue(issueId);
+    if (issue.stateName !== S.planned && issue.stateName !== S.reopened) {
+      log.scheduler.info(
+        { issueId, stateName: issue.stateName, expectedState, connectionId: ctx.connectionId },
+        "estimate done but issue left Planned/Reopened — abort dispatch"
+      );
+      return;
+    }
+
+    if (isActiveHarnessPausedForRole("dev")) {
+      log.scheduler.debug({ issueId, connectionId: ctx.connectionId }, "estimate done: harness Dev pausado — abort");
+      return;
+    }
+
+    if (store.findOpenRun(issueId, "dev") || agent.hasActiveDispatchForIssue(issueId)) {
+      log.scheduler.info(
+        { issueId, connectionId: ctx.connectionId },
+        "estimate done: Dev already active for issue — abort duplicate dispatch"
+      );
+      return;
+    }
+
+    const occupied = await lin.countInState(S.inProgress);
+    if (occupied >= config.capacity.maxDevWorkers) {
+      log.scheduler.info(
+        { issueId, occupied, max: config.capacity.maxDevWorkers, connectionId: ctx.connectionId },
+        "estimate done but no free Dev seats — next tick will retry"
+      );
+      return;
+    }
+
+    if (!(await depsSatisfied(ctx, issueId))) {
+      log.scheduler.debug({ issueId, connectionId: ctx.connectionId }, "estimate done: deps not satisfied — abort");
+      return;
+    }
+
+    // Se no meio tempo virou Reopened com lock (raro), o caminho de fix retry
+    // do próximo tick cuida — aqui só implementação "nova" / sem lock.
+    if (await locks.hasLock(ctx.connectionId, issueId) && issue.stateName === S.reopened) {
+      log.scheduler.info({ issueId, connectionId: ctx.connectionId }, "estimate done: reopened with lock — defer to fix-retry path");
+      return;
+    }
+
+    const active = (await locks.activeFootprints(ctx.connectionId)).map((a) => a.footprint);
+    if (collidesWithActive(footprint, active)) {
+      log.scheduler.debug({ issueId, footprint, connectionId: ctx.connectionId }, "estimate done: footprint collision — abort");
+      return;
+    }
+
+    await commitNewImplementation(ctx, issue.id, issue.stateName, footprint);
+  } finally {
+    await locks.clearEstimating(ctx.connectionId, issueId);
   }
-
-  if (isActiveHarnessPausedForRole("dev")) {
-    log.scheduler.debug({ issueId, connectionId: ctx.connectionId }, "estimate done: harness Dev pausado — abort");
-    return;
-  }
-
-  const occupied = await lin.countInState(S.inProgress);
-  if (occupied >= config.capacity.maxDevWorkers) {
-    log.scheduler.info(
-      { issueId, occupied, max: config.capacity.maxDevWorkers, connectionId: ctx.connectionId },
-      "estimate done but no free Dev seats — next tick will retry"
-    );
-    return;
-  }
-
-  if (!(await depsSatisfied(ctx, issueId))) {
-    log.scheduler.debug({ issueId, connectionId: ctx.connectionId }, "estimate done: deps not satisfied — abort");
-    return;
-  }
-
-  // Se no meio tempo virou Reopened com lock (raro), o caminho de fix retry
-  // do próximo tick cuida — aqui só implementação "nova" / sem lock.
-  if (await locks.hasLock(ctx.connectionId, issueId) && issue.stateName === S.reopened) {
-    log.scheduler.info({ issueId, connectionId: ctx.connectionId }, "estimate done: reopened with lock — defer to fix-retry path");
-    return;
-  }
-
-  const active = (await locks.activeFootprints(ctx.connectionId)).map((a) => a.footprint);
-  if (collidesWithActive(footprint, active)) {
-    log.scheduler.debug({ issueId, footprint, connectionId: ctx.connectionId }, "estimate done: footprint collision — abort");
-    return;
-  }
-
-  await commitNewImplementation(ctx, issue.id, issue.stateName, footprint);
 }
 
 async function commitNewImplementation(
@@ -562,14 +741,31 @@ async function commitNewImplementation(
   footprint: Footprint
 ): Promise<boolean> {
   const lin = linearFor(ctx);
+
+  if (store.findOpenRun(issueId, "dev") || agent.hasActiveDispatchForIssue(issueId)) {
+    log.scheduler.info(
+      { issueId, connectionId: ctx.connectionId },
+      "dev dispatch skipped: issue already has an active Dev/run"
+    );
+    return false;
+  }
+
   const active = (await locks.activeFootprints(ctx.connectionId)).map((a) => a.footprint);
   if (collidesWithActive(footprint, active)) {
     log.scheduler.debug({ issueId, footprint, connectionId: ctx.connectionId }, "dev dispatch skipped: footprint collision");
     return false;
   }
 
+  // Exclusive claim — two estimateThenDispatch completions must not both spawn Dev.
+  if (!(await locks.tryAcquireLock(ctx.connectionId, issueId, footprint))) {
+    log.scheduler.info(
+      { issueId, connectionId: ctx.connectionId },
+      "dev dispatch skipped: lost exclusive lock race"
+    );
+    return false;
+  }
+
   log.scheduler.info({ issueId, footprint, mode: "implement", connectionId: ctx.connectionId }, "dispatching dev");
-  await locks.acquireLock(ctx.connectionId, issueId, footprint);
   await moveState(lin, issueId, stateName, S.inProgress, "new implementation");
   await locks.markStarted(ctx.connectionId, issueId);
   if (stateName === S.planned) {
@@ -910,6 +1106,111 @@ async function reclaimPhase(
     } catch (e) {
       log.scheduler.error({ issueId: issue.id, state, connectionId: ctx.connectionId, ...errFields(e) }, "reclaim phase failed");
     }
+  }
+}
+
+/**
+ * Self-heal: Valkey footprint locks have no TTL (by design — Blocked may hold
+ * them for days). Release is normally driven by the Completed webhook. When
+ * that webhook is missed (or the issue left lock-holding states some other
+ * way), Planned candidates stay blocked forever by "active lock" collisions.
+ * Ask Linear for each lock holder's current state and drop orphans.
+ */
+async function reconcileStaleLocks(ctx: LinearContext): Promise<void> {
+  const active = await locks.activeFootprints(ctx.connectionId);
+  if (active.length === 0) return;
+
+  const lin = linearFor(ctx);
+  const holding = lockHoldingStates();
+  let released = 0;
+
+  for (const { issueId } of active) {
+    try {
+      const issue = await lin.getIssue(issueId);
+      if (holding.has(issue.stateName)) continue;
+
+      log.scheduler.warn(
+        {
+          issueId,
+          identifier: issue.identifier,
+          stateName: issue.stateName,
+          connectionId: ctx.connectionId,
+        },
+        "stale footprint lock — issue left lock-holding states without release; releasing"
+      );
+      await locks.releaseLock(ctx.connectionId, issueId);
+      await locks.clearFootprint(ctx.connectionId, issueId);
+      await locks.clearAttempts(ctx.connectionId, issueId);
+      await locks.clearStarted(ctx.connectionId, issueId);
+      await locks.clearMergingIf(ctx.connectionId, issueId);
+      released++;
+    } catch (e) {
+      if (isLinearRateLimitError(e)) throw e;
+      // Network / transient errors must NOT release — only confirmed non-holding
+      // states do. Log and keep the lock for the next tick.
+      log.scheduler.warn(
+        { issueId, connectionId: ctx.connectionId, ...errFields(e) },
+        "stale lock check failed — keeping lock until next tick"
+      );
+    }
+  }
+
+  if (released > 0) {
+    log.scheduler.info(
+      { released, remaining: active.length - released, connectionId: ctx.connectionId },
+      "stale footprint locks reconciled"
+    );
+  }
+}
+
+/**
+ * Self-heal: issue workspaces under WORKSPACE_ROOT survive until Completed.
+ * If the Completed webhook is missed (or the pipeline is tick-only), dirs for
+ * issues that left workspace-holding states would leak disk forever.
+ * Broader than lock reconcile — Planned/Refining keep workspaces without locks.
+ */
+async function reconcileStaleWorkspaces(ctx: LinearContext): Promise<void> {
+  const issueIds = listIssueWorkspaceIssueIds(ctx.connectionId);
+  if (issueIds.length === 0) return;
+
+  const lin = linearFor(ctx);
+  const holding = workspaceHoldingStates(S);
+  const busy = agent.activeDispatchCwds();
+  let removed = 0;
+
+  for (const issueId of issueIds) {
+    try {
+      const cwd = issueWorkspaceCwd(issueId, ctx.connectionId);
+      if (busy.has(cwd)) continue;
+
+      const issue = await lin.getIssue(issueId);
+      if (holding.has(issue.stateName)) continue;
+
+      log.scheduler.warn(
+        {
+          issueId,
+          identifier: issue.identifier,
+          stateName: issue.stateName,
+          connectionId: ctx.connectionId,
+        },
+        "stale issue workspace — issue left workspace-holding states; removing from disk"
+      );
+      removeIssueWorkspace(issueId, ctx.connectionId);
+      removed++;
+    } catch (e) {
+      if (isLinearRateLimitError(e)) throw e;
+      log.scheduler.warn(
+        { issueId, connectionId: ctx.connectionId, ...errFields(e) },
+        "stale workspace check failed — keeping directory until next tick"
+      );
+    }
+  }
+
+  if (removed > 0) {
+    log.scheduler.info(
+      { removed, remaining: issueIds.length - removed, connectionId: ctx.connectionId },
+      "stale issue workspaces reconciled"
+    );
   }
 }
 

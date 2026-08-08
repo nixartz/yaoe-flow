@@ -12,9 +12,10 @@
 // nativo, referência Multica" (§7.2). Rodar o smoke test real (§9.2) antes de
 // ativar em produção é obrigatório; ajustar os matchers de `parseLine` é o
 // primeiro lugar a olhar se o smoke falhar.
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { resolveHarnessBin, withHarnessSpawnEnv } from "../../cli/setup/harnessDeps";
 import { agentLog, errFields } from "../../logger";
+import { cleanupAfterRun } from "../workspace";
 import type { HarnessAdapter, HarnessCapabilities, HarnessDetection, HarnessId, HarnessRun, HarnessRunInput } from "./types";
 
 export interface NativeStreamJsonSpec {
@@ -118,13 +119,8 @@ export function createNativeStreamJsonAdapter(spec: NativeStreamJsonSpec): Harne
         agentLog({ harness: spec.id, runId: input.runId, role: input.role }).error({ ...errFields(e) }, "native adapter run failed");
         throw e;
       } finally {
-        if (!input.resumeSessionId && existsSync(input.cwd)) {
-          try {
-            rmSync(input.cwd, { recursive: true, force: true });
-          } catch {
-            /* best-effort */
-          }
-        }
+        // Issue workspaces survive until Completed; only ephemeral run-* dirs go.
+        cleanupAfterRun(input.cwd, false);
       }
     })();
 

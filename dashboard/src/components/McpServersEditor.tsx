@@ -1,9 +1,27 @@
-import { useMemo, useState } from "react";
-import { IconPlus, IconTrash, IconChevronDown, IconChevronRight } from "@tabler/icons-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { IconGripVertical, IconPlus, IconTrash } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { JsonEditor } from "@/components/JsonEditor";
 import {
   KeyValueEditor,
@@ -11,6 +29,7 @@ import {
   compactStringList,
   compactRecord,
 } from "@/components/KeyValueEditor";
+import { cn } from "@/lib/utils";
 
 export type McpDraft =
   | { type: "builtin"; name: string }
@@ -84,6 +103,27 @@ const TYPE_LABEL: Record<McpDraft["type"], string> = {
   stdio: "Processo (stdio)",
   streamable_http: "HTTP",
 };
+
+function mcpSummary(item: McpDraft): string {
+  if (item.type === "builtin") return "builtin";
+  if (item.type === "stdio") {
+    const args = (item.args ?? []).filter(Boolean).join(" ");
+    return args ? `${item.cmd} ${args}` : item.cmd || "—";
+  }
+  return item.uri || "—";
+}
+
+function newRowId(): string {
+  return crypto.randomUUID();
+}
+
+function reconcileRowIds(prev: string[], length: number): string[] {
+  if (prev.length === length) return prev;
+  if (prev.length < length) {
+    return [...prev, ...Array.from({ length: length - prev.length }, () => newRowId())];
+  }
+  return prev.slice(0, length);
+}
 
 // Presets prontos — espelham as configs conhecidas-boas dos agentes default
 // (app/src/agent/recipe/defaults.ts e o wiring do Hindsight no builder).
@@ -163,7 +203,7 @@ const MCP_PRESETS: McpPreset[] = [
   },
 ];
 
-function McpCard({
+function McpDetailPanel({
   item,
   index,
   onChange,
@@ -177,17 +217,23 @@ function McpCard({
   const id = `mcp-${index}`;
 
   return (
-    <div className="rounded-lg border p-3">
+    <div className="flex h-full flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline">{TYPE_LABEL[item.type]}</Badge>
-        <span className="text-sm font-medium">{item.name || "Sem nome"}</span>
-        <Button type="button" size="sm" variant="ghost" className="ml-auto h-7 gap-1 text-destructive" onClick={onRemove}>
+        <span className="min-w-0 truncate text-sm font-medium">{item.name || "Sem nome"}</span>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="ml-auto h-7 shrink-0 gap-1 text-destructive"
+          onClick={onRemove}
+        >
           <IconTrash className="size-3.5" aria-hidden />
           Remover
         </Button>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3">
         <div className="flex flex-col gap-1">
           <label htmlFor={`${id}-type`} className="text-xs font-medium text-muted-foreground">
             Tipo
@@ -232,7 +278,7 @@ function McpCard({
 
         {item.type === "stdio" && (
           <>
-            <div className="flex flex-col gap-1 sm:col-span-2">
+            <div className="flex flex-col gap-1">
               <label htmlFor={`${id}-cmd`} className="text-xs font-medium text-muted-foreground">
                 Comando
               </label>
@@ -243,7 +289,7 @@ function McpCard({
                 onChange={(e) => onChange({ ...item, cmd: e.target.value })}
               />
             </div>
-            <div className="flex flex-col gap-1 sm:col-span-2">
+            <div className="flex flex-col gap-1">
               <label htmlFor={`${id}-args`} className="text-xs font-medium text-muted-foreground">
                 Argumentos (um por linha)
               </label>
@@ -254,12 +300,12 @@ function McpCard({
                 placeholder={"-y\n@tacticlaunch/mcp-linear"}
               />
             </div>
-            <div className="flex flex-col gap-1 sm:col-span-2">
+            <div className="flex flex-col gap-1">
               <label htmlFor={`${id}-envKeys`} className="text-xs font-medium text-muted-foreground">
-                Nomes de variáveis de ambiente (envKeys) — um por linha
+                Nomes de variáveis de ambiente (envKeys)
               </label>
               <p className="text-[11px] text-muted-foreground">
-                Nomes resolvidos do ambiente em runtime (ex.: LINEAR_API_TOKEN). Não coloque o valor secreto aqui.
+                Nomes resolvidos em runtime (ex.: LINEAR_API_TOKEN). Não coloque o valor secreto aqui.
               </p>
               <StringListEditor
                 id={`${id}-envKeys`}
@@ -268,7 +314,7 @@ function McpCard({
                 placeholder={"LINEAR_API_TOKEN\nGITHUB_PERSONAL_ACCESS_TOKEN"}
               />
             </div>
-            <div className="flex flex-col gap-1 sm:col-span-2">
+            <div className="flex flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground">Valores fixos (envs)</span>
               <p className="text-[11px] text-muted-foreground">
                 Pares chave/valor injetados no processo (ex.: GITHUB_TOOLSETS). Sem segredos.
@@ -290,7 +336,7 @@ function McpCard({
                 id={`${id}-timeout`}
                 type="number"
                 min={0}
-                className="h-9 w-32"
+                className="h-9 w-full"
                 value={item.timeout ?? ""}
                 placeholder="opcional"
                 onChange={(e) => {
@@ -311,7 +357,7 @@ function McpCard({
 
         {item.type === "streamable_http" && (
           <>
-            <div className="flex flex-col gap-1 sm:col-span-2">
+            <div className="flex flex-col gap-1">
               <label htmlFor={`${id}-uri`} className="text-xs font-medium text-muted-foreground">
                 URL
               </label>
@@ -322,10 +368,10 @@ function McpCard({
                 onChange={(e) => onChange({ ...item, uri: e.target.value })}
               />
             </div>
-            <div className="flex flex-col gap-1 sm:col-span-2">
+            <div className="flex flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground">Headers HTTP</span>
               <p className="text-[11px] text-muted-foreground">
-                Cabeçalhos enviados na requisição (Authorization, etc.). Prefira referências a env quando possível.
+                Cabeçalhos enviados na requisição. Prefira referências a env quando possível.
               </p>
               <KeyValueEditor
                 idPrefix={`${id}-headers`}
@@ -344,7 +390,7 @@ function McpCard({
                 id={`${id}-http-timeout`}
                 type="number"
                 min={0}
-                className="h-9 w-32"
+                className="h-9 w-full"
                 value={item.timeout ?? ""}
                 placeholder="opcional"
                 onChange={(e) => {
@@ -367,6 +413,82 @@ function McpCard({
   );
 }
 
+function SortableMcpRow({
+  id,
+  item,
+  selected,
+  onSelect,
+}: {
+  id: string;
+  item: McpDraft;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      data-state={selected ? "selected" : undefined}
+      className={cn("cursor-pointer", isDragging && "relative z-10 bg-background opacity-80 shadow-sm")}
+      onClick={onSelect}
+      aria-selected={selected}
+    >
+      <TableCell className="w-10 px-2">
+        <button
+          type="button"
+          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`Reordenar ${item.name || "integração"}`}
+          {...attributes}
+          {...listeners}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <IconGripVertical className="size-4" aria-hidden />
+        </button>
+      </TableCell>
+      <TableCell className="max-w-[10rem] truncate font-medium">{item.name || "Sem nome"}</TableCell>
+      <TableCell>
+        <Badge variant="outline" className="font-normal">
+          {TYPE_LABEL[item.type]}
+        </Badge>
+      </TableCell>
+      <TableCell className="hidden max-w-[14rem] truncate font-mono text-xs text-muted-foreground xl:table-cell" title={mcpSummary(item)}>
+        {mcpSummary(item)}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function AddIntegrationSelect({ onAdd }: { onAdd: (presetId: string) => void }) {
+  return (
+    <Select value="" onValueChange={onAdd}>
+      <SelectTrigger className="h-9 w-full max-w-64" aria-label="Adicionar integração">
+        <span className="flex items-center gap-1 text-sm">
+          <IconPlus className="size-3.5" aria-hidden />
+          Adicionar integração…
+        </span>
+      </SelectTrigger>
+      <SelectContent>
+        {MCP_PRESETS.map((p) => (
+          <SelectItem key={p.id} value={p.id}>
+            <div className="flex flex-col">
+              <span>{p.label}</span>
+              <span className="text-[11px] text-muted-foreground">{p.description}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** Altura mínima dos 3 painéis — cobre o formulário stdio completo (~660px). */
+const MCP_PANEL_MIN_H = "min-h-[660px]";
+
 export function McpServersEditor({
   value,
   onChange,
@@ -376,13 +498,36 @@ export function McpServersEditor({
   onChange: (json: string) => void;
 }) {
   const parsed = useMemo(() => parseMcps(value), [value]);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [advancedError, setAdvancedError] = useState<string | null>(null);
-
   const items = parsed.ok ? parsed.items : [];
+  const [rowIds, setRowIds] = useState<string[]>(() => Array.from({ length: items.length }, () => newRowId()));
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const updateItems = (next: McpDraft[]) => {
+  // Mantém IDs estáveis alinhados ao comprimento da lista (add/remove / JSON avançado).
+  const syncedIds = reconcileRowIds(rowIds, items.length);
+  if (syncedIds !== rowIds) {
+    setRowIds(syncedIds);
+  }
+
+  useEffect(() => {
+    if (syncedIds.length === 0) {
+      setSelectedId(null);
+      return;
+    }
+    setSelectedId((prev) => (prev && syncedIds.includes(prev) ? prev : syncedIds[0]!));
+  }, [syncedIds]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const selectedIndex = selectedId ? syncedIds.indexOf(selectedId) : -1;
+  const selectedItem = selectedIndex >= 0 ? items[selectedIndex] : undefined;
+
+  const updateItems = (next: McpDraft[], nextIds?: string[]) => {
     onChange(serializeMcps(next));
+    if (nextIds) setRowIds(nextIds);
     setAdvancedError(null);
   };
 
@@ -392,6 +537,30 @@ export function McpServersEditor({
     copy[index] = next;
     onChange(JSON.stringify(copy, null, 2));
     setAdvancedError(null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = syncedIds.indexOf(String(active.id));
+    const newIndex = syncedIds.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    updateItems(arrayMove(items, oldIndex, newIndex), arrayMove(syncedIds, oldIndex, newIndex));
+  };
+
+  const addPreset = (presetId: string) => {
+    const preset = MCP_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    const id = newRowId();
+    updateItems([...items, preset.make()], [...syncedIds, id]);
+    setSelectedId(id);
+  };
+
+  const removeSelected = () => {
+    if (selectedIndex < 0) return;
+    const nextItems = items.filter((_, j) => j !== selectedIndex);
+    const nextIds = syncedIds.filter((_, j) => j !== selectedIndex);
+    updateItems(nextItems, nextIds);
   };
 
   return (
@@ -407,79 +576,111 @@ export function McpServersEditor({
         </p>
       )}
 
-      {parsed.ok && (
-        <div className="flex flex-col gap-2">
-          {items.length === 0 && (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              Nenhuma integração configurada. Adicione Linear, GitHub ou um servidor customizado.
-            </p>
-          )}
-          {items.map((item, i) => (
-            <McpCard
-              key={i}
-              item={item}
-              index={i}
-              onChange={(next) => patchItem(i, next)}
-              onRemove={() => updateItems(items.filter((_, j) => j !== i))}
-            />
-          ))}
+      <div className="grid gap-3 lg:grid-cols-4">
+        {/* Lista — 2/4 */}
+        <div className={cn("flex flex-col gap-2 rounded-lg border p-3 lg:col-span-2", MCP_PANEL_MIN_H)}>
           <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value=""
-              onValueChange={(id) => {
-                const preset = MCP_PRESETS.find((p) => p.id === id);
-                if (preset) updateItems([...items, preset.make()]);
-              }}
-            >
-              <SelectTrigger className="h-9 w-64" aria-label="Adicionar integração">
-                <span className="flex items-center gap-1 text-sm">
-                  <IconPlus className="size-3.5" aria-hidden />
-                  Adicionar integração…
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {MCP_PRESETS.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <div className="flex flex-col">
-                      <span>{p.label}</span>
-                      <span className="text-[11px] text-muted-foreground">{p.description}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      )}
-
-      <div className="border-t pt-2">
-        <button
-          type="button"
-          className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-          onClick={() => setAdvancedOpen((o) => !o)}
-          aria-expanded={advancedOpen}
-        >
-          {advancedOpen ? <IconChevronDown className="size-3.5" /> : <IconChevronRight className="size-3.5" />}
-          JSON avançado
-        </button>
-        {advancedOpen && (
-          <div className="mt-2 flex flex-col gap-2">
-            <JsonEditor
-              value={value}
-              onChange={(v) => {
-                onChange(v);
-                const check = parseMcps(v);
-                setAdvancedError(check.ok ? null : check.error);
-              }}
-              minHeightClass="min-h-48"
-            />
-            {advancedError && (
-              <p className="text-sm text-destructive" role="alert">
-                {advancedError}
-              </p>
+            <AddIntegrationSelect onAdd={addPreset} />
+            {parsed.ok && (
+              <span className="text-xs text-muted-foreground">
+                {items.length === 0
+                  ? "Nenhuma integração"
+                  : `${items.length} ${items.length === 1 ? "integração" : "integrações"}`}
+              </span>
             )}
           </div>
-        )}
+
+          <div className="min-h-0 flex-1 overflow-auto">
+            {!parsed.ok ? (
+              <div className="flex h-full flex-col items-center justify-center gap-1 p-6 text-center">
+                <p className="text-sm font-medium text-destructive">JSON inválido</p>
+                <p className="text-xs text-muted-foreground">Corrija o JSON no painel à direita para listar as integrações.</p>
+              </div>
+            ) : items.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 rounded-md border border-dashed p-6 text-center">
+                <p className="text-sm font-medium">Nenhuma integração configurada</p>
+                <p className="max-w-sm text-xs text-muted-foreground">
+                  Adicione Linear, GitHub ou um servidor customizado para começar.
+                </p>
+              </div>
+            ) : (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={syncedIds} strategy={verticalListSortingStrategy}>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10 px-2">
+                          <span className="sr-only">Reordenar</span>
+                        </TableHead>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead className="hidden xl:table-cell">Destino</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map((item, i) => {
+                        const id = syncedIds[i];
+                        if (!id) return null;
+                        return (
+                          <SortableMcpRow
+                            key={id}
+                            id={id}
+                            item={item}
+                            selected={id === selectedId}
+                            onSelect={() => setSelectedId(id)}
+                          />
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </SortableContext>
+              </DndContext>
+            )}
+          </div>
+        </div>
+
+        {/* Detalhe — 1/4 */}
+        <div className={cn("flex flex-col overflow-hidden rounded-lg border p-3 lg:col-span-1", MCP_PANEL_MIN_H)}>
+          {parsed.ok && selectedItem && selectedIndex >= 0 ? (
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <McpDetailPanel
+                item={selectedItem}
+                index={selectedIndex}
+                onChange={(next) => patchItem(selectedIndex, next)}
+                onRemove={removeSelected}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-1 p-4 text-center">
+              <p className="text-sm font-medium">Sem seleção</p>
+              <p className="text-xs text-muted-foreground">
+                {parsed.ok
+                  ? "Selecione uma integração na tabela para editar os detalhes."
+                  : "Corrija o JSON para editar integrações."}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* JSON — 1/4 */}
+        <div className={cn("flex flex-col gap-2 rounded-lg border p-3 lg:col-span-1", MCP_PANEL_MIN_H)}>
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">JSON avançado</span>
+          <JsonEditor
+            className="min-h-0 flex-1"
+            value={value}
+            onChange={(v) => {
+              onChange(v);
+              const check = parseMcps(v);
+              setAdvancedError(check.ok ? null : check.error);
+            }}
+            minHeightClass="min-h-[560px] h-full"
+          />
+          {advancedError && (
+            <p className="shrink-0 text-sm text-destructive" role="alert">
+              {advancedError}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

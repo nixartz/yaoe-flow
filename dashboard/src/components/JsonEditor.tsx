@@ -118,8 +118,8 @@ export function JsonEditor({
   const sharedText = "p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words";
 
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
-      <div className="flex items-center gap-2">
+    <div className={cn("flex min-h-0 flex-col gap-1.5", className)}>
+      <div className="flex shrink-0 items-center gap-2">
         <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" type="button" disabled={!!parseError} onClick={format}>
           <IconBraces className="size-3.5" /> Validar &amp; formatar
         </Button>
@@ -139,7 +139,7 @@ export function JsonEditor({
 
       <div
         className={cn(
-          "relative overflow-hidden rounded-md border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/50",
+          "relative min-h-0 flex-1 overflow-hidden rounded-md border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/50",
           parseError && "border-destructive/60"
         )}
       >

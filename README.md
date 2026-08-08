@@ -32,7 +32,7 @@ YAOE-FLOW turns a Linear board into a self-driving delivery loop. Specialized AI
 │                                                               │
 │  footprint locks (Valkey) keep parallel agents from colliding │
 └───────────────────────────────────────────────────────────────┘
-          │  each run: isolated clone in ~/.yaoe-flow/worktrees/run-<id>
+          │  each issue: durable clone in ~/.yaoe-flow/worktrees/issue-<id>
           ▼
         GitHub (branches, PRs, merges)
 ```

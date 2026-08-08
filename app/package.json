@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
-    "start:debug": "bun --inspect-wait=localhost:6499/debug src/index.ts",
+    "start:debug": "bun --inspect-wait=localhost:6499 src/index.ts",
     "start:debug:watch": "bun --inspect-wait=localhost:6499/debug --watch src/index.ts",
     "start:debug:watch:log": "bun --inspect-wait=localhost:6499/debug --watch src/index.ts | bun run log",
     "log": "pino-pretty --singleLine --colorize",

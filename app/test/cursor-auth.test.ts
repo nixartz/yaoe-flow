@@ -41,6 +41,10 @@ describe("cursorAuth helpers", () => {
   test("cursorDaemonHome ignores isolated worktree HOME", () => {
     const real = "/home/lucas-souza";
     expect(cursorDaemonHome({ HOME: `${real}/.yaoe-flow/worktrees/run-12-home` })).not.toContain("run-12-home");
+    expect(cursorDaemonHome({ HOME: `${real}/.yaoe-flow/worktrees/issue-abc-home` })).not.toContain("issue-abc-home");
+    expect(
+      cursorDaemonHome({ HOME: `${real}/.yaoe-flow/worktrees/conn-xyz/issue-abc-home` })
+    ).not.toContain("issue-abc-home");
     expect(cursorDaemonHome({ HOME: real })).toBe(real);
   });
 });

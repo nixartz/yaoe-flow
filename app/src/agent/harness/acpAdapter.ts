@@ -13,7 +13,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveHarnessBin, withHarnessSpawnEnv } from "../../cli/setup/harnessDeps";
 import { agentLog, errFields } from "../../logger";
-import { runAcpTurn, listAcpModels, cleanupWorkspace, type AcpProcess } from "../acp/client";
+import { runAcpTurn, listAcpModels, type AcpProcess } from "../acp/client";
+import { cleanupAfterRun, isIssueWorkspaceCwd } from "../workspace";
 import {
   extractCursorLoginUrl,
   isCursorAuthRequiredError,
@@ -93,15 +94,22 @@ export function createAcpAdapter(spec: AcpAdapterSpec): HarnessAdapter {
       try {
         for (let authAttempt = 1; authAttempt <= maxAuthAttempts; authAttempt++) {
           try {
-            prep?.cleanup?.();
-            prep = undefined;
+            // Drop previous spawn mirrors before retry — only for ephemeral run-*
+            // dirs. Issue workspaces keep siblings until Completed (prepareSpawn
+            // still remirrors HOME/config at the start of the next attempt).
+            if (prep) {
+              if (!isIssueWorkspaceCwd(input.cwd)) prep.cleanup?.();
+              prep = undefined;
+            }
             const baseEnv = withHarnessSpawnEnv(spec.buildEnv(input));
             prep = spec.prepareSpawn?.(input, baseEnv);
+            const spawnArgs = prep?.args ?? spec.args ?? [];
+            const spawnEnv = prep?.env ?? baseEnv;
             const { result: turn } = await runAcpTurn({
               spawn: {
                 bin: resolveHarnessBin(spec.bin),
-                args: prep?.args ?? spec.args ?? [],
-                env: prep?.env ?? baseEnv,
+                args: spawnArgs,
+                env: spawnEnv,
                 cwd: input.cwd,
               },
               authenticateMethodId: spec.authenticateMethodId,
@@ -134,6 +142,10 @@ export function createAcpAdapter(spec: AcpAdapterSpec): HarnessAdapter {
             if (!canWait) throw e;
 
             const url = extractCursorLoginUrl(e);
+            const apiKey = resolveCursorApiKey({ settings: input.settings, env: input.env });
+            // Note: `cursor-agent status` prints "Not logged in" even when a valid
+            // CURSOR_API_KEY works for ACP. Do not treat status-not-logged as
+            // "key rejected" when a key is configured.
             const lines = [
               "Cursor authentication required before this run can continue.",
               url
@@ -143,6 +155,12 @@ export function createAcpAdapter(spec: AcpAdapterSpec): HarnessAdapter {
               "Preferred on servers: set CURSOR_API_KEY in Config (or Harness → Cursor).",
               "Or use Harness → Log in to Cursor, then wait — this run will retry automatically.",
             ];
+            if (apiKey) {
+              lines.push(
+                "",
+                "A CURSOR_API_KEY is configured but browser login was still requested — the run will wait for CLI file-store login, or restart after confirming the key is a User API Key."
+              );
+            }
             input.onEvent({
               kind: "agent_message_chunk",
               text: `${lines.join("\n")}\n`,
@@ -150,7 +168,7 @@ export function createAcpAdapter(spec: AcpAdapterSpec): HarnessAdapter {
             });
 
             const ready = await waitForCursorAuth({
-              apiKey: resolveCursorApiKey({ settings: input.settings, env: input.env }),
+              apiKey,
               shouldAbort: () => killed,
               onProgress(msg) {
                 input.onEvent({
@@ -174,11 +192,16 @@ export function createAcpAdapter(spec: AcpAdapterSpec): HarnessAdapter {
         throw e;
       } finally {
         try {
-          prep?.cleanup?.();
+          // Issue workspaces keep HOME/config siblings until Completed (Cursor
+          // still remirrors at the start of the next spawn). Ephemeral run-*
+          // dirs still get prepareSpawn cleanup + cleanupAfterRun.
+          if (!isIssueWorkspaceCwd(input.cwd)) {
+            prep?.cleanup?.();
+          }
         } catch {
           /* best-effort */
         }
-        cleanupWorkspace(input.cwd, false);
+        cleanupAfterRun(input.cwd, false);
       }
     })();
 

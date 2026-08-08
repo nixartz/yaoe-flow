@@ -28,7 +28,8 @@ export function cursorCredentialEnv(extra: Record<string, string> = {}): Record<
 }
 
 /**
- * Daemon profile HOME — never a previous run's isolated `…/run-*-home`.
+ * Daemon profile HOME — never a previous run's isolated `…/run-*-home` or
+ * `…/issue-*-home`.
  * Tests pass a fake HOME via `env.HOME`; production uses the service user's HOME.
  */
 export function cursorDaemonHome(env?: Record<string, string>): string {
@@ -38,6 +39,8 @@ export function cursorDaemonHome(env?: Record<string, string>): string {
     if (!h) return undefined;
     if (/[/\\]worktrees[/\\]run-[^/\\]+-home$/i.test(h)) return undefined;
     if (/[/\\]run-\d+-home$/i.test(h)) return undefined;
+    if (/[/\\]worktrees[/\\](?:conn-[^/\\]+[/\\])?issue-[^/\\]+-home$/i.test(h)) return undefined;
+    if (/[/\\]issue-[a-f0-9-]+-home$/i.test(h)) return undefined;
     return h;
   };
   return pick(fromEnv) || pick(fromProcess) || homedir();
@@ -52,8 +55,7 @@ export function resolveCursorApiKey(input: {
   if (fromSettings) return fromSettings;
   const fromConfig = config.cursor.apiKey.trim();
   if (fromConfig) return fromConfig;
-  const fromEnv = (input.env?.CURSOR_API_KEY ?? "").trim();
-  return fromEnv;
+  return (input.env?.CURSOR_API_KEY ?? "").trim();
 }
 
 /** ACP spawn args: pass `--api-key` before `acp` when we have a key (Cursor docs). */
@@ -121,7 +123,10 @@ export async function probeCursorAuthStatus(opts?: {
     ...(apiKey ? { CURSOR_API_KEY: apiKey } : {}),
   });
   try {
-    const proc = Bun.spawn([bin, "status"], {
+    // Prefer --api-key on the argv (same as ACP spawn) — some CLI builds ignore
+    // CURSOR_API_KEY for `status` when only the env var is set.
+    const statusArgs = apiKey ? ["--api-key", apiKey, "status"] : ["status"];
+    const proc = Bun.spawn([bin, ...statusArgs], {
       stdout: "pipe",
       stderr: "pipe",
       env,
@@ -131,14 +136,15 @@ export async function probeCursorAuthStatus(opts?: {
     const raw = out.trim();
     const loggedIn =
       /logged in|login successful|authenticated/i.test(raw) && !/not logged in|not authenticated/i.test(raw);
-    // Best-effort account line (format varies by CLI version).
+    // Do NOT treat "API key is set" as logged in — cursor-agent status can still
+    // print "Not logged in" even when CURSOR_API_KEY works for ACP.
     const account =
       raw.match(/(?:email|account|user)\s*[:=]\s*(\S+)/i)?.[1] ??
       raw.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i)?.[1];
-    return { loggedIn: loggedIn || Boolean(apiKey && !/invalid.*api.?key/i.test(raw)), raw, account };
+    return { loggedIn, raw, account };
   } catch (e) {
     log.agent.warn({ harness: "cursor", ...errFields(e) }, "cursor-agent status probe failed");
-    return { loggedIn: Boolean(apiKey), raw: String(e) };
+    return { loggedIn: false, raw: String(e) };
   }
 }
 
@@ -156,23 +162,22 @@ export async function waitForCursorAuth(opts: {
   const deadline = Date.now() + timeoutMs;
   opts.onProgress?.(
     `Waiting for Cursor authentication (up to ${Math.round(timeoutMs / 60_000)} min). ` +
-      `Set CURSOR_API_KEY in Config, or use Harness → Log in to Cursor.`
+      `Complete Harness → Log in to Cursor, or ensure CURSOR_API_KEY is a valid User API Key.`
   );
   while (Date.now() < deadline) {
     if (opts.shouldAbort?.()) return false;
+    // With CURSOR_API_KEY, ACP skips browser authenticate — readiness is "key present".
+    // `cursor-agent status` still prints "Not logged in" for API-key-only auth,
+    // so do not require statusSaysLoggedIn when a key is set.
     const key = (opts.apiKey ?? resolveCursorApiKey({})).trim();
     if (key) {
-      const st = await probeCursorAuthStatus({ apiKey: key });
-      if (st.loggedIn) {
-        opts.onProgress?.("Cursor authentication ready — retrying the run.");
-        return true;
-      }
-    } else {
-      const st = await probeCursorAuthStatus();
-      if (st.loggedIn) {
-        opts.onProgress?.("Cursor CLI login detected — retrying the run.");
-        return true;
-      }
+      opts.onProgress?.("CURSOR_API_KEY present — retrying the run (API-key ACP path).");
+      return true;
+    }
+    const st = await probeCursorAuthStatus();
+    if (st.loggedIn) {
+      opts.onProgress?.("Cursor CLI login detected — retrying the run.");
+      return true;
     }
     await Bun.sleep(AUTH_POLL_MS);
   }

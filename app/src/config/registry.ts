@@ -512,7 +512,7 @@ const harnessGroup: SettingMeta[] = [
     default: "$YAOE_HOME/worktrees",
     scope: "harness",
     description:
-      "BASE directory of the run workspaces (absolute). Every run operates in an exclusive subdirectory (run-<runId>), created at dispatch and removed at the end — concurrent runs never clone into the same place. Empty = $YAOE_HOME/worktrees.",
+      "BASE directory of agent workspaces (absolute). Each issue gets a durable subdirectory (`issue-<issueId>`, or `conn-<connectionId>/issue-<issueId>` for non-default Linear connections) reused until Completed. Ephemeral `run-<runId>` dirs are only used when a dispatch has no issueId. Empty = $YAOE_HOME/worktrees.",
   },
   {
     key: "GOOSE_BIN",
@@ -553,7 +553,8 @@ const harnessGroup: SettingMeta[] = [
     type: "boolean",
     default: false,
     scope: "harness",
-    description: "true keeps the run workspace on disk after it ends (debugging). Default removes it — workspaces are ephemeral by design.",
+    description:
+      "true keeps issue workspaces on disk even after Completed (debugging). Default removes them when the issue completes or when the tick finds a stale Completed workspace.",
   },
   {
     key: "GOOSE_ENV_FILE",

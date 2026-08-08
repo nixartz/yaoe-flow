@@ -89,3 +89,15 @@ export const bootstrap = {
   yaoePidFile: resolve(yaoeHome, "yaoe-flow.pid"),
   yaoeConfigEnvPath: configEnvPath,
 } as const;
+
+/**
+ * Expand `$YAOE_HOME` placeholders in configured paths. Registry defaults use
+ * the literal string `$YAOE_HOME/...`; without expansion, svc.str() returns that
+ * truthy string and worktrees land in `./$YAOE_HOME/worktrees` relative to cwd.
+ */
+export function expandYaoeHomePath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) return trimmed;
+  if (!trimmed.includes("$YAOE_HOME")) return trimmed;
+  return trimmed.split("$YAOE_HOME").join(yaoeHome);
+}

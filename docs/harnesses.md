@@ -53,13 +53,13 @@ For remote execution without local CLIs: a Hermes gateway exposes each role as a
 
 Hermes is fire-and-report: the dashboard records dispatch/result, but there is no step-by-step trace, and seat timeouts count total phase time instead of inactivity.
 
-## Per-run isolation
+## Per-issue workspace isolation
 
-Every run gets `$YAOE_HOME/worktrees/run-<id>` and, for ACP harnesses, an isolated HOME mirror:
+Every issue gets `$YAOE_HOME/worktrees/issue-<issueId>` (reused across PMO → Dev → Review → Reopened/Blocked until **Completed**; non-default Linear connections use `conn-<connectionId>/issue-<issueId>`). ACP harnesses still mirror HOME/config beside that cwd each spawn:
 
-- Cursor: per-run HOME neutralizes your `~/.cursor/mcp.json` (avoids "Too many MCP tools" refusals), `~/.gitconfig` enters as a copy, `gh` config is empty, `~/.git-credentials` stays out (`CURSOR_ISOLATE_MCP_CONFIG`).
-- Claude Code / Codex: per-run `CLAUDE_CONFIG_DIR` / `CODEX_HOME` with attribution toggles (`*_ATTRIBUTION` settings).
-- Git credentials come from the run token (see [github-setup.md](github-setup.md)); workspaces are deleted after the run (`GOOSE_KEEP_WORKSPACES=true` keeps them for debugging).
+- Cursor: `issue-<id>-home` neutralizes your `~/.cursor/mcp.json` (avoids "Too many MCP tools" refusals), `~/.gitconfig` enters as a copy, `gh` config is empty, `~/.git-credentials` stays out (`CURSOR_ISOLATE_MCP_CONFIG`).
+- Claude Code / Codex: `issue-<id>-claude-config` / `issue-<id>-codex-home` with attribution toggles (`*_ATTRIBUTION` settings).
+- Git credentials come from the run token (see [github-setup.md](github-setup.md)). The **code** tree is not deleted between runs; it is removed on Completed (webhook) or by the tick's stale-workspace reconcile. `GOOSE_KEEP_WORKSPACES=true` keeps dirs after Completed for debugging.
 
 ## Detection, budgets and troubleshooting
 

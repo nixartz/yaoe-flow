@@ -1,5 +1,8 @@
 // Estado persistente em Valkey, isolado por Linear connection:
-//  • LOCKS    — footprint travado de cada task EM ANDAMENTO (vivo até Completed).
+//  • LOCKS    — footprint travado de cada task EM ANDAMENTO (vivo até Completed
+//               ou até reconcileStaleLocks no tick se o webhook se perder).
+//               Hash field SEM TTL — Blocked pode segurar o lock por dias;
+//               liberação é por evento (Completed) + self-heal no tick.
 //  • FP       — cache do footprint estimado pelo planning pass.
 //  • MERGING  — qual issue está em merge AGORA (serializa: um merge por connection).
 //
@@ -36,13 +39,55 @@ function keys(connectionId: string) {
     sessionPrefix: `${p}session:`,
     /** Snapshot de prontidão (candidatas + motivos) — TTL, refresh no tick. */
     readiness: `${p}readiness`,
+    /** In-flight Orchestrator footprint estimate (SET NX + TTL). */
+    estimatingPrefix: `${p}estimating:`,
   };
 }
+
+/** TTL safety net if the process dies mid-estimate (daemon restart). */
+export const ESTIMATING_TTL_SECONDS = 15 * 60;
 
 export async function acquireLock(connectionId: string, issueId: string, fp: Footprint): Promise<void> {
   const k = keys(connectionId);
   await redis.hset(k.locks, issueId, JSON.stringify(fp));
   log.valkey.info({ connectionId, issueId, footprint: fp }, "footprint lock acquired");
+}
+
+/**
+ * Atomic claim of the footprint lock for a **new** implementation.
+ * Returns false if this issue already holds a lock (lost a race with a twin
+ * estimateThenDispatch / concurrent commit) — caller must NOT dispatch again.
+ */
+export async function tryAcquireLock(connectionId: string, issueId: string, fp: Footprint): Promise<boolean> {
+  const k = keys(connectionId);
+  const added = await redis.hsetnx(k.locks, issueId, JSON.stringify(fp));
+  if (added === 1) {
+    log.valkey.info({ connectionId, issueId, footprint: fp }, "footprint lock acquired (exclusive)");
+    return true;
+  }
+  log.valkey.info({ connectionId, issueId }, "footprint lock claim lost (already held)");
+  return false;
+}
+
+/** Reserve exclusive right to run the Orchestrator planning pass for this issue. */
+export async function tryBeginEstimate(connectionId: string, issueId: string): Promise<boolean> {
+  const key = `${keys(connectionId).estimatingPrefix}${issueId}`;
+  const ok = await redis.set(key, "1", "EX", ESTIMATING_TTL_SECONDS, "NX");
+  if (ok === "OK") {
+    log.valkey.info({ connectionId, issueId, ttlSeconds: ESTIMATING_TTL_SECONDS }, "estimate reservation acquired");
+    return true;
+  }
+  log.valkey.debug({ connectionId, issueId }, "estimate reservation denied (already in flight)");
+  return false;
+}
+
+export async function isEstimating(connectionId: string, issueId: string): Promise<boolean> {
+  return (await redis.exists(`${keys(connectionId).estimatingPrefix}${issueId}`)) === 1;
+}
+
+export async function clearEstimating(connectionId: string, issueId: string): Promise<void> {
+  const removed = await redis.del(`${keys(connectionId).estimatingPrefix}${issueId}`);
+  if (removed) log.valkey.info({ connectionId, issueId }, "estimate reservation cleared");
 }
 
 export async function releaseLock(connectionId: string, issueId: string): Promise<void> {

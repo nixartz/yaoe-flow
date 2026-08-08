@@ -4,11 +4,13 @@
 // mais por `AGENT_BACKEND` fixo no boot — `dispatch.ts` resolve isso a cada
 // chamada (§7.3).
 import { authorizedOrgsLine, joinDispatchLines, pendingMergeLine } from "./backend";
-import { runDispatch, estimateFootprintViaAgent, cancelActiveRun } from "./dispatch";
+import { runDispatch, estimateFootprintViaAgent, cancelActiveRun, activeDispatchCwds, hasActiveDispatchForIssue, listActiveRunIdsForIssue } from "./dispatch";
 import { activeAgentForRole } from "../db/agents";
 import type { LinearContext } from "../db/linearConnections";
 import { linearFor } from "../linear";
 import type { Footprint, WorkerMode } from "../types";
+
+export { activeDispatchCwds, hasActiveDispatchForIssue, listActiveRunIdsForIssue };
 
 /** Nome do backend/harness ativo do papel `orchestrator` — exibido no /health. */
 export function backendName(): string {

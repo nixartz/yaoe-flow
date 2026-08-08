@@ -6,7 +6,7 @@
 // `HarnessAdapter` on top of this — the only difference between them is the
 // spawn command and how the SOUL/prompt enters the session (recipe deeplink
 // vs. a plain system prompt).
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import type pino from "pino";
 import {
   ClientSideConnection,
@@ -20,6 +20,7 @@ import {
 import { log, errFields } from "../../logger";
 import type { McpServerConfig } from "../recipe/defaults";
 import type { HarnessUsage, NormalizedEvent } from "../harness/types";
+import { cleanupAfterRun } from "../workspace";
 
 export interface AcpSpawnSpec {
   bin: string;
@@ -918,9 +919,17 @@ export async function runAcpTurn(opts: AcpRunOptions): Promise<{ result: AcpRunR
 
     // Cursor ACP exige authenticate(cursor_login) antes de session/new —
     // sem isso a sessão trava. Goose/Claude/Codex ignoram se não anunciam.
+    //
+    // When pre-authenticated via --api-key / CURSOR_API_KEY, calling
+    // authenticate(cursor_login) still opens a browser OAuth challenge on
+    // headless hosts — skip it and rely on the API key.
     const methodId = pickAuthMethodId(initResult, opts.authenticateMethodId);
-    if (methodId) {
+    const hasApiKeyAuth =
+      Boolean(opts.spawn.env.CURSOR_API_KEY?.trim()) || opts.spawn.args.includes("--api-key");
+    if (methodId && !hasApiKeyAuth) {
       await withTimeout(conn.authenticate({ methodId }), 60_000, "authenticate");
+    } else if (methodId && hasApiKeyAuth) {
+      logger.info({ methodId }, "acp: skipping authenticate — CURSOR_API_KEY / --api-key present");
     }
 
     // MCPs já resolvidos antes do spawn (segredos embutidos; agent env limpo).
@@ -1181,12 +1190,16 @@ export async function listAcpModels(opts: {
     // método e responde "Method not implemented". E aqui a falha nunca é fatal
     // — o CLI pode já estar logado, e uma lista de modelos não vale abortar.
     const methodId = pickAuthMethodId(initResult, opts.authenticateMethodId);
-    if (methodId) {
+    const hasApiKeyAuth =
+      Boolean(opts.spawn.env.CURSOR_API_KEY?.trim()) || opts.spawn.args.includes("--api-key");
+    if (methodId && !hasApiKeyAuth) {
       try {
         await withTimeout(conn.authenticate({ methodId }), 60_000, "authenticate");
       } catch (e) {
         opts.log.debug({ methodId, ...errFields(e) }, "sonda de modelos: authenticate falhou — seguindo pro session/new");
       }
+    } else if (methodId && hasApiKeyAuth) {
+      opts.log.debug({ methodId }, "sonda de modelos: skipping authenticate — API key present");
     }
 
     const sess = await withTimeout(
@@ -1211,11 +1224,7 @@ export async function listAcpModels(opts: {
   }
 }
 
+/** @deprecated Prefer `cleanupAfterRun` — issue workspaces are durable until Completed. */
 export function cleanupWorkspace(cwd: string, keep: boolean): void {
-  if (keep) return;
-  try {
-    if (existsSync(cwd)) rmSync(cwd, { recursive: true, force: true });
-  } catch (e) {
-    log.agent.warn({ cwd, ...errFields(e) }, "falha ao remover workspace do run (best-effort)");
-  }
+  cleanupAfterRun(cwd, keep);
 }

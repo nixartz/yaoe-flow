@@ -9,11 +9,165 @@ import { DEFAULT_CONNECTION_ID, singleTenantContext } from "./db/linearConnectio
 
 const API = "https://api.linear.app/graphql";
 
+/** Soft floor: below this remaining budget, skip a full reconciliation tick. */
+export const LINEAR_TICK_BUDGET_FLOOR = 40;
+
 export interface LinearScope {
   apiKey: string;
   teamId: string | null;
   /** Chave de cache (connectionId); "default" = single-tenant. */
   connectionId: string;
+}
+
+export class LinearRateLimitError extends Error {
+  readonly resetAtMs: number;
+  readonly remaining: number;
+  readonly limit: number;
+
+  constructor(message: string, opts: { resetAtMs: number; remaining?: number; limit?: number }) {
+    super(message);
+    this.name = "LinearRateLimitError";
+    this.resetAtMs = opts.resetAtMs;
+    this.remaining = opts.remaining ?? 0;
+    this.limit = opts.limit ?? 5000;
+  }
+}
+
+export function isLinearRateLimitError(e: unknown): e is LinearRateLimitError {
+  return e instanceof LinearRateLimitError;
+}
+
+type RateLimitState = {
+  remaining: number | null;
+  limit: number | null;
+  resetAtMs: number | null;
+  /** Wall clock until which callers must not hit Linear for this key. */
+  cooledUntilMs: number | null;
+};
+
+const rateLimitByKey = new Map<string, RateLimitState>();
+
+function rateLimitKey(apiKey: string): string {
+  return apiKey.slice(0, 12);
+}
+
+function getRateLimitState(apiKey: string): RateLimitState {
+  const k = rateLimitKey(apiKey);
+  let st = rateLimitByKey.get(k);
+  if (!st) {
+    st = { remaining: null, limit: null, resetAtMs: null, cooledUntilMs: null };
+    rateLimitByKey.set(k, st);
+  }
+  return st;
+}
+
+/** Remaining cooldown ms for this API key (0 = clear to call). */
+export function linearRateLimitCooldownMs(apiKey: string): number {
+  const st = getRateLimitState(apiKey);
+  if (!st.cooledUntilMs) return 0;
+  return Math.max(0, st.cooledUntilMs - Date.now());
+}
+
+/** Snapshot of last-seen Linear request budget for this key (from response headers). */
+export function linearRateLimitSnapshot(apiKey: string): {
+  remaining: number | null;
+  limit: number | null;
+  resetAtMs: number | null;
+  cooledUntilMs: number | null;
+} {
+  const st = getRateLimitState(apiKey);
+  return {
+    remaining: st.remaining,
+    limit: st.limit,
+    resetAtMs: st.resetAtMs,
+    cooledUntilMs: st.cooledUntilMs,
+  };
+}
+
+/** True when a full tick would likely exhaust the hourly budget. */
+export function shouldSkipTickForRateBudget(apiKey: string): boolean {
+  if (linearRateLimitCooldownMs(apiKey) > 0) return true;
+  const st = getRateLimitState(apiKey);
+  return st.remaining !== null && st.remaining < LINEAR_TICK_BUDGET_FLOOR;
+}
+
+function markRateLimited(apiKey: string, resetAtMs: number, remaining = 0, limit = 5000): void {
+  const st = getRateLimitState(apiKey);
+  st.remaining = remaining;
+  st.limit = limit;
+  st.resetAtMs = resetAtMs;
+  st.cooledUntilMs = resetAtMs;
+  log.linear.warn(
+    {
+      remaining,
+      limit,
+      resetAtMs,
+      cooldownMs: Math.max(0, resetAtMs - Date.now()),
+    },
+    "Linear rate limit — entering cooldown until reset"
+  );
+}
+
+function recordRateLimitHeaders(apiKey: string, headers: Headers): void {
+  const remainingRaw = headers.get("X-RateLimit-Requests-Remaining");
+  const limitRaw = headers.get("X-RateLimit-Requests-Limit");
+  const resetRaw = headers.get("X-RateLimit-Requests-Reset");
+  if (remainingRaw === null && limitRaw === null && resetRaw === null) return;
+
+  const st = getRateLimitState(apiKey);
+  if (remainingRaw !== null) st.remaining = Number(remainingRaw);
+  if (limitRaw !== null) st.limit = Number(limitRaw);
+  if (resetRaw !== null) {
+    const resetAtMs = Number(resetRaw);
+    if (Number.isFinite(resetAtMs)) st.resetAtMs = resetAtMs;
+  }
+
+  // Hard stop when the window is exhausted — avoid thrashing until reset.
+  if (st.remaining === 0 && st.resetAtMs && st.resetAtMs > Date.now()) {
+    st.cooledUntilMs = st.resetAtMs;
+  } else if (st.cooledUntilMs && st.remaining !== null && st.remaining > LINEAR_TICK_BUDGET_FLOOR) {
+    // Budget recovered (new window or clock skew) — clear stale cooldown.
+    st.cooledUntilMs = null;
+  }
+}
+
+type GqlErrorExt = {
+  code?: string;
+  statusCode?: number;
+  meta?: { rateLimitResult?: { remaining?: number; limit?: number; duration?: number } };
+};
+
+function parseRateLimitFromErrors(
+  errors: unknown
+): { remaining: number; limit: number; durationMs: number } | null {
+  if (!Array.isArray(errors)) return null;
+  for (const err of errors) {
+    const ext = (err as { extensions?: GqlErrorExt })?.extensions;
+    if (!ext || (ext.code !== "RATELIMITED" && ext.statusCode !== 429)) continue;
+    const meta = ext.meta?.rateLimitResult;
+    return {
+      remaining: meta?.remaining ?? 0,
+      limit: meta?.limit ?? 5000,
+      durationMs: meta?.duration ?? 3_600_000,
+    };
+  }
+  return null;
+}
+
+function assertNotInCooldown(apiKey: string, operation: string, context: Record<string, unknown>): void {
+  const cooldownMs = linearRateLimitCooldownMs(apiKey);
+  if (cooldownMs <= 0) return;
+  const st = getRateLimitState(apiKey);
+  const resetAtMs = st.cooledUntilMs ?? Date.now() + cooldownMs;
+  log.linear.warn(
+    { operation, cooldownMs, resetAtMs, ...context },
+    "Linear API call skipped: rate limit cooldown active"
+  );
+  throw new LinearRateLimitError(`Linear rate limit cooldown (${cooldownMs}ms remaining)`, {
+    resetAtMs,
+    remaining: st.remaining ?? 0,
+    limit: st.limit ?? 5000,
+  });
 }
 
 type GqlFn = <T>(
@@ -31,6 +185,7 @@ function makeGql(apiKey: string): GqlFn {
     context: Record<string, unknown> = {}
   ): Promise<T> {
     const start = Date.now();
+    assertNotInCooldown(apiKey, operation, context);
     try {
       const res = await fetch(API, {
         method: "POST",
@@ -42,9 +197,32 @@ function makeGql(apiKey: string): GqlFn {
         signal: AbortSignal.timeout(config.httpTimeoutMs),
       });
       const durationMs = Date.now() - start;
+      recordRateLimitHeaders(apiKey, res.headers);
 
       if (!res.ok) {
         const body = await res.text();
+        let parsed: { errors?: unknown } | null = null;
+        try {
+          parsed = JSON.parse(body) as { errors?: unknown };
+        } catch {
+          /* non-JSON body */
+        }
+        const rl = parsed ? parseRateLimitFromErrors(parsed.errors) : null;
+        if (rl) {
+          const st = getRateLimitState(apiKey);
+          const resetAtMs =
+            st.resetAtMs && st.resetAtMs > Date.now() ? st.resetAtMs : Date.now() + rl.durationMs;
+          markRateLimited(apiKey, resetAtMs, rl.remaining, rl.limit);
+          log.linear.error(
+            { operation, status: res.status, durationMs, body, ...context },
+            "Linear API HTTP error"
+          );
+          throw new LinearRateLimitError(`Linear API rate limited (${rl.remaining}/${rl.limit} remaining)`, {
+            resetAtMs,
+            remaining: rl.remaining,
+            limit: rl.limit,
+          });
+        }
         log.linear.error(
           { operation, status: res.status, durationMs, body, ...context },
           "Linear API HTTP error"
@@ -54,6 +232,22 @@ function makeGql(apiKey: string): GqlFn {
 
       const json = (await res.json()) as { data?: T; errors?: unknown };
       if (json.errors) {
+        const rl = parseRateLimitFromErrors(json.errors);
+        if (rl) {
+          const st = getRateLimitState(apiKey);
+          const resetAtMs =
+            st.resetAtMs && st.resetAtMs > Date.now() ? st.resetAtMs : Date.now() + rl.durationMs;
+          markRateLimited(apiKey, resetAtMs, rl.remaining, rl.limit);
+          log.linear.error(
+            { operation, durationMs, errors: json.errors, ...context },
+            "Linear GraphQL error"
+          );
+          throw new LinearRateLimitError(`Linear API rate limited (${rl.remaining}/${rl.limit} remaining)`, {
+            resetAtMs,
+            remaining: rl.remaining,
+            limit: rl.limit,
+          });
+        }
         log.linear.error(
           { operation, durationMs, errors: json.errors, ...context },
           "Linear GraphQL error"
@@ -64,6 +258,7 @@ function makeGql(apiKey: string): GqlFn {
       log.linear.debug({ operation, durationMs, ...context }, "Linear API ok");
       return json.data as T;
     } catch (e) {
+      if (isLinearRateLimitError(e)) throw e;
       if (e instanceof Error && (e.message.startsWith("Linear API") || e.message.startsWith("Linear GraphQL"))) {
         throw e;
       }
@@ -74,6 +269,24 @@ function makeGql(apiKey: string): GqlFn {
       throw e;
     }
   };
+}
+
+/** Test helper — clears in-memory rate-limit / cooldown state. */
+export function __resetLinearRateLimitStateForTests(): void {
+  rateLimitByKey.clear();
+}
+
+/** Test helper — force a cooldown as if Linear returned RATELIMITED. */
+export function __markLinearRateLimitedForTests(
+  apiKey: string,
+  opts: { resetAtMs: number; remaining?: number; limit?: number }
+): void {
+  markRateLimited(apiKey, opts.resetAtMs, opts.remaining ?? 0, opts.limit ?? 5000);
+}
+
+/** Test helper — apply response headers the way makeGql does. */
+export function __recordLinearRateLimitHeadersForTests(apiKey: string, headers: Headers): void {
+  recordRateLimitHeaders(apiKey, headers);
 }
 
 interface RawRel {
@@ -113,6 +326,16 @@ function normalize(raw: RawIssue): LinearIssue {
 export function createLinearClient(scope: LinearScope) {
   const gql = makeGql(scope.apiKey);
   const teamId = () => scope.teamId ?? "";
+
+  // Per-tick memo: fill* + readiness + reclaim often list the same states.
+  // Cleared via beginTickCache() at the start of each connection reconcile.
+  let tickListCache = new Map<string, Promise<LinearIssue[]>>();
+  let tickIssueCache = new Map<string, Promise<LinearIssue>>();
+
+  function beginTickCache(): void {
+    tickListCache = new Map();
+    tickIssueCache = new Map();
+  }
 
   function withTeamFilter(filter: Record<string, unknown>): Record<string, unknown> {
     const id = teamId();
@@ -180,43 +403,66 @@ export function createLinearClient(scope: LinearScope) {
   }
 
   async function getIssue(id: string): Promise<LinearIssue> {
-    const data = await gql<{ issue: RawIssue }>(
-      "issue.get",
-      `query($id: String!) {
-        issue(id: $id) {
-          id identifier title
-          state { name }
-          team { id }
-          inverseRelations { nodes { type issue { id state { name } } relatedIssue { id state { name } } } }
-        }
-      }`,
-      { id },
-      { issueId: id }
-    );
-    return normalize(data.issue);
+    const cached = tickIssueCache.get(id);
+    if (cached) return cached;
+    const pending = (async () => {
+      const data = await gql<{ issue: RawIssue }>(
+        "issue.get",
+        `query($id: String!) {
+          issue(id: $id) {
+            id identifier title
+            state { name }
+            team { id }
+            inverseRelations { nodes { type issue { id state { name } } relatedIssue { id state { name } } } }
+          }
+        }`,
+        { id },
+        { issueId: id }
+      );
+      return normalize(data.issue);
+    })();
+    tickIssueCache.set(id, pending);
+    try {
+      return await pending;
+    } catch (e) {
+      tickIssueCache.delete(id);
+      throw e;
+    }
   }
 
   async function listIssuesInState(stateName: string): Promise<LinearIssue[]> {
-    const data = await gql<{
-      issues: {
-        nodes: { id: string; identifier: string; title: string; state: { name: string }; team?: { id: string } }[];
-      };
-    }>(
-      "issues.listByState",
-      `query($filter: IssueFilter!) {
-        issues(first: 50, filter: $filter) {
-          nodes { id identifier title state { name } team { id } }
-        }
-      }`,
-      { filter: withTeamFilter({ state: { name: { eq: stateName } } }) },
-      { stateName }
-    );
-    return data.issues.nodes.map((n) => ({
-      ...n,
-      stateName: n.state.name,
-      teamId: n.team?.id,
-      blockedBy: [],
-    }));
+    const cacheKey = `state:${stateName}`;
+    const cached = tickListCache.get(cacheKey);
+    if (cached) return cached;
+    const pending = (async () => {
+      const data = await gql<{
+        issues: {
+          nodes: { id: string; identifier: string; title: string; state: { name: string }; team?: { id: string } }[];
+        };
+      }>(
+        "issues.listByState",
+        `query($filter: IssueFilter!) {
+          issues(first: 50, filter: $filter) {
+            nodes { id identifier title state { name } team { id } }
+          }
+        }`,
+        { filter: withTeamFilter({ state: { name: { eq: stateName } } }) },
+        { stateName }
+      );
+      return data.issues.nodes.map((n) => ({
+        ...n,
+        stateName: n.state.name,
+        teamId: n.team?.id,
+        blockedBy: [],
+      }));
+    })();
+    tickListCache.set(cacheKey, pending);
+    try {
+      return await pending;
+    } catch (e) {
+      tickListCache.delete(cacheKey);
+      throw e;
+    }
   }
 
   async function countInState(stateName: string): Promise<number> {
@@ -224,31 +470,43 @@ export function createLinearClient(scope: LinearScope) {
   }
 
   async function listIssuesInStateWithLabel(stateName: string, labelName: string): Promise<LinearIssue[]> {
-    const data = await gql<{
-      issues: {
-        nodes: { id: string; identifier: string; title: string; state: { name: string }; team?: { id: string } }[];
-      };
-    }>(
-      "issues.listByStateAndLabel",
-      `query($filter: IssueFilter!) {
-        issues(first: 50, filter: $filter) {
-          nodes { id identifier title state { name } team { id } }
-        }
-      }`,
-      {
-        filter: withTeamFilter({
-          state: { name: { eq: stateName } },
-          labels: { name: { eq: labelName } },
-        }),
-      },
-      { stateName, labelName }
-    );
-    return data.issues.nodes.map((n) => ({
-      ...n,
-      stateName: n.state.name,
-      teamId: n.team?.id,
-      blockedBy: [],
-    }));
+    const cacheKey = `state+label:${stateName}:${labelName}`;
+    const cached = tickListCache.get(cacheKey);
+    if (cached) return cached;
+    const pending = (async () => {
+      const data = await gql<{
+        issues: {
+          nodes: { id: string; identifier: string; title: string; state: { name: string }; team?: { id: string } }[];
+        };
+      }>(
+        "issues.listByStateAndLabel",
+        `query($filter: IssueFilter!) {
+          issues(first: 50, filter: $filter) {
+            nodes { id identifier title state { name } team { id } }
+          }
+        }`,
+        {
+          filter: withTeamFilter({
+            state: { name: { eq: stateName } },
+            labels: { name: { eq: labelName } },
+          }),
+        },
+        { stateName, labelName }
+      );
+      return data.issues.nodes.map((n) => ({
+        ...n,
+        stateName: n.state.name,
+        teamId: n.team?.id,
+        blockedBy: [],
+      }));
+    })();
+    tickListCache.set(cacheKey, pending);
+    try {
+      return await pending;
+    } catch (e) {
+      tickListCache.delete(cacheKey);
+      throw e;
+    }
   }
 
   async function setState(issueId: string, stateName: string): Promise<void> {
@@ -560,10 +818,13 @@ export function createLinearClient(scope: LinearScope) {
     labelCache = null;
     orgUrlKeyCache = null;
     viewerCache = null;
+    beginTickCache();
   }
 
   return {
     scope,
+    /** Call once per connection reconcile so fill* + readiness share list/getIssue. */
+    beginTickCache,
     linearDispatchHints,
     getIssue,
     listIssuesInState,

@@ -15,10 +15,10 @@ import {
 } from "../../openrouter";
 import {
   runAcpTurn,
-  cleanupWorkspace,
   stripLinearApiSecretsFromEnv,
   type AcpProcess,
 } from "../acp/client";
+import { cleanupAfterRun } from "../workspace";
 import { buildGooseRecipe, gooseRecipeWithModel, cachedGooseRecipe, type BuiltGooseRecipe } from "../recipe/builder";
 import { withGitHttpsInsteadOf } from "./gitRunEnv";
 import type { HarnessAdapter, HarnessDetection, HarnessRun, HarnessRunInput } from "./types";
@@ -218,7 +218,7 @@ function createRun(input: HarnessRunInput): HarnessRun {
       runLog.error({ ...errFields(e) }, "goose adapter run failed");
       throw e;
     } finally {
-      cleanupWorkspace(workDir, config.goose.keepWorkspaces);
+      cleanupAfterRun(workDir, config.goose.keepWorkspaces);
     }
   })();
 

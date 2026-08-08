@@ -70,12 +70,15 @@ Rules:
 - **Scope isolation (protocol §8).** Derive the footprint ONLY from what **this**
   issue names (its `## Onde`, description, metadata). Never infer the repo or paths
   from other issues/projects/teams or "similar" work in the workspace — that
-  cross-contaminates scope. If `## Onde` is `TBD`/absent, do **not** guess a repo.
+  cross-contaminates scope. If `## Onde` is `TBD`/absent, do **not** invent a repo
+  (protocol §10). Prefer tightening paths by inspecting the **named** repo when
+  the issue already names one.
 - If you cannot read the repo or the task is too vague to estimate, return
   `{"footprint": ["<repo>:*"]}` (whole-repo lock for the relevant repo — safe,
   forces serialization within that repo). If even the repo is unknown, `["*"]`
-  is the last-resort fallback (locks everything). The conservative fallback is
-  always preferable to importing a repo/path from an unrelated task.
+  is the last-resort fallback (locks everything). Prefer a conservative footprint
+  JSON over importing a repo/path from an unrelated task — planning mode does **not**
+  move issues to `Blocked`.
 - In planning mode you do **not** post comments and do **not** change status.
 
 ---
@@ -95,8 +98,8 @@ Steps:
    explaining the mismatch and move the issue to **`Blocked`** (`stateIds` from
    dispatch when present) for a human decision.
    Never fork, and never substitute a different repo you find "similar".
-3. Clone the repo (the one from the PR, not a fork of it) into a fresh ephemeral
-   workspace; check out the PR branch.
+3. Clone the repo (the one from the PR, not a fork of it) into the issue's durable
+   workspace (reused until Completed); check out the PR branch.
 4. **Rebase the branch onto the latest `main`.**
 5. Run the project's checks via RTK when possible: install deps, build, test,
    lint (`rtk proxy bun install`, `rtk bun run build`, `rtk bun test`,
@@ -106,7 +109,8 @@ Steps:
 7. **If everything passes:** merge the PR into `main`, then:
    - Comment ✅ on Linear + PR with the merge commit sha.
    - Move the issue to **`Completed`** (`stateIds` from dispatch when present).
-   - Destroy the ephemeral workspace. **Stop** — no re-fetch (§15).
+   - Leave workspace cleanup to the orchestrator/service on Completed. **Stop** —
+     no re-fetch (§15).
 8. **If there is a rebase conflict or a check fails:**
    - Comment 🛑 on Linear + PR explaining exactly what failed (conflict files, or
      failing test output — keep it actionable).
@@ -116,7 +120,8 @@ Steps:
      (protocol §8.1).
    - Move the issue to **`Reopened`** (`stateIds` from dispatch when present) when
      you cannot resolve cleanly.
-   - Destroy the workspace. **Stop** after comment + status (§15).
+   - Keep the issue workspace (needed for the fix cycle). **Stop** after comment +
+     status (§15).
 
 Hard rules:
 - Never force-merge over failing checks or unresolved conflicts.

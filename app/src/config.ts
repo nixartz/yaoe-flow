@@ -12,7 +12,7 @@
 //
 // A família src/config/ (este arquivo + bootstrap.ts + registry.ts +
 // service.ts) é a única autorizada a ler process.env (ver AGENTS.md).
-import { bootstrap } from "./config/bootstrap";
+import { bootstrap, expandYaoeHomePath } from "./config/bootstrap";
 import * as svc from "./config/service";
 
 // Cada papel do pipeline é um PERFIL do Hermes (`hermes profile create <model>`,
@@ -121,9 +121,15 @@ export const config = {
       return svc.str("GOOSE_RECIPES_DIR");
     },
     get workingDir() {
-      // Workspace root for EVERY harness (not only Goose): each run clones into
-      // an exclusive run-<runId> subdirectory. Default: $YAOE_HOME/worktrees.
-      return svc.str("WORKSPACE_ROOT") || bootstrap.yaoeWorktreesDir;
+      // Workspace root for EVERY harness: issue-scoped durable dirs under here
+      // (`issue-<issueId>`), plus rare ephemeral `run-<runId>`. Default: $YAOE_HOME/worktrees.
+      // Registry default is the literal "$YAOE_HOME/worktrees" — expand it, and
+      // treat empty / placeholder as the bootstrap absolute path.
+      const raw = expandYaoeHomePath(svc.str("WORKSPACE_ROOT"));
+      if (!raw || raw === bootstrap.yaoeWorktreesDir) return bootstrap.yaoeWorktreesDir;
+      // After expansion, still reject a leftover unexpanded placeholder.
+      if (raw.includes("$YAOE_HOME")) return bootstrap.yaoeWorktreesDir;
+      return raw;
     },
     get requestTimeoutMs() {
       return svc.num("GOOSE_REQUEST_TIMEOUT_MS");

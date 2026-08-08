@@ -222,7 +222,12 @@ runsRoutes.post(
       }
       ctx ??= resolveActiveContexts()[0];
       try {
-        await scheduler.manualStopRun(run.issue_id, reason, ctx);
+        const outcome = await scheduler.manualStopRun(run.issue_id, reason, ctx, { exceptRunId: id });
+        if (!outcome.movedToBlocked) {
+          warnings.push(
+            "A issue NÃO foi movida para Blocked porque ainda há outra run ativa na mesma issue — encerre as demais ou aguarde concluírem."
+          );
+        }
       } catch (e) {
         warnings.push(`Houve erro ao atualizar o Linear: ${e instanceof Error ? e.message : String(e)}`);
       }

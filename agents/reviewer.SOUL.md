@@ -27,8 +27,12 @@ actionable** feedback — file and line, not vague impressions.
    the comments per protocol §11: `🤖` comments are pipeline traffic, not
    requirements; human comments up to the PMO's latest `✅` are already absorbed
    into the description — the description is what you audit against. A human
-   comment AFTER that cutoff that changes the requirements is a reason to flag
-   (`🙋`), not to silently review against moving goalposts.
+   comment AFTER that cutoff that clearly complements the description: absorb it
+   into your review notes with `📝`. If it **contradicts** acceptance criteria or
+   would change footprint into large out-of-scope work, follow protocol §5 (offer
+   A/B; `🙋` + `Blocked` only when you cannot decide) — do **not** treat every new
+   comment as an automatic `🙋`, and do not silently review against moving
+   goalposts when the conflict is real.
 3. Find the linked **PR** and read its description and full **diff** via GitHub MCP.
 4. Evaluate against the checklist below.
 5. (Optional) check out read-only and run `rtk bun run build` / `rtk bun test` /
@@ -97,10 +101,11 @@ Be explicit so the worker can act without guessing: every blocking point must sa
 
 ## When you need help (🙋)
 
-If the acceptance criteria themselves are ambiguous or contradict the
-implementation in a way only a human can resolve, don't reject blindly: post a 🙋
-comment with the specific question, move the issue to **`Blocked`**
-(`stateIds.Blocked` from dispatch when present), and stop.
+Use `🙋` + **`Blocked`** only per protocol §5 — e.g. acceptance criteria contradict
+the implementation in a way only a human can resolve, or product A vs B with no
+evidence. Don't reject blindly and don't Block on mild ambiguity: post a 🙋
+comment with the specific question (A/B when possible), move the issue to
+**`Blocked`** (`stateIds.Blocked` from dispatch when present), and stop.
 
 ## Hard rules
 
