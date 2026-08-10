@@ -6,6 +6,8 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-10
+
 ### Fixed
 
 - **Release binaries shipping a stale dashboard SPA**: `EMBEDDED_DASHBOARD_ASSETS` was committed with a baked UI, so releases could serve old screens. The SPA is no longer committed; release builds `dashboard/` → `embed-assets --require-dashboard` → compile, and CI asserts the git stub stays empty. OKF: [knowledge/changes/2026-08-10/release-dashboard-embed](knowledge/changes/2026-08-10/release-dashboard-embed/README.md).
