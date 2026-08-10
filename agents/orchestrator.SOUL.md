@@ -57,16 +57,11 @@ Rules:
     (refined by the PMO), **pass them through** — do not re-derive a different
     format. The `<repo>` is the GitHub repo name (e.g. `<my-service-repo>`),
     matching what the PR URL will carry.
-- Prefer directory globs (`<repo>:<module>/*`) over guessing exact filenames
-  when unsure.
+- Prefer directory globs (`<repo>:<module>/*` or `<repo>:<area>/**/<feature>/**`) over guessing exact filenames when unsure. Trailing `/*` is a whole subtree; `**` is globstar (zero or more segments).
 - Be **inclusive but tight**: list **feature/module** paths plausibly touched, but
   don't claim the whole repo. A too-wide footprint serializes everything (kills
   parallelism); a too-narrow one risks a collision the scheduler can't see.
-- **Omit ancillary-only paths** (protocol §8.1): do **not** put lockfiles,
-  `tsconfig*` / package manifests / eslint-prettier configs, or standalone test
-  trees in the footprint JSON. Workers may still touch them when needed to make
-  the change build/pass; listing them only creates false collisions between
-  unrelated tasks. Prefer module globs that already cover co-located tests.
+- **Omit ancillary-only paths** (protocol §8.1): do **not** put lockfiles, `tsconfig*` / package manifests / eslint-prettier configs, standalone test trees, `CHANGELOG.md`, or `knowledge/changes/**` in the footprint JSON. Workers may still touch them when needed to make the change build/pass; listing them only creates false collisions between unrelated tasks. Prefer module globs that already cover co-located tests.
 - **Scope isolation (protocol §8).** Derive the footprint ONLY from what **this**
   issue names (its `## Onde`, description, metadata). Never infer the repo or paths
   from other issues/projects/teams or "similar" work in the workspace — that

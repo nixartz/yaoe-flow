@@ -128,18 +128,14 @@ issue actually names):
 ```
 ## Footprint
 - <repo>:<module>/*
+- <repo>:<area>/**/<feature>/**
 - <repo>:<file>.ts
 ```
 
 - One entry per repo + path/module. Use globs for directories.
-- **Tight but inclusive:** cover the **feature/module** paths the task will really
-  touch; don't claim a whole repo. A too-wide footprint serializes everything; a
-  too-narrow one lets scope leak.
-- **Do NOT list ancillary-only paths** (lockfiles, `tsconfig*` / package manifests /
-  eslint-prettier-biome configs, standalone test trees) as footprint entries — they
-  are allowed collateral per protocol §8.1 and listing them falsely collides with
-  other tasks. Prefer module globs that already cover co-located `*.test.*` when
-  tests live next to the code.
+- **Glob dialect (orchestrator matcher):** trailing `/*` = whole subtree; `**` = globstar (zero or more segments); mid-path `*` = one segment. `src/app/**/perfil/**` matches `src/app/perfil/...` and `src/app/(app)/perfil/...`.
+- **Tight but inclusive:** cover the **feature/module** paths the task will really touch; don't claim a whole repo. A too-wide footprint serializes everything; a too-narrow one lets scope leak.
+- **Do NOT list ancillary-only paths** (lockfiles, `tsconfig*` / package manifests / eslint-prettier-biome configs, standalone test trees, `CHANGELOG.md`, `knowledge/changes/**`) as footprint entries — they are allowed collateral per protocol §8.1 and listing them falsely collides with other tasks. Prefer module globs that already cover co-located `*.test.*` when tests live next to the code.
 - When writing `## Fora de escopo`, do **not** forbid regenerating locks or minimal
   config/test fixes needed for CI — those are not "out of scope", they are §8.1.
 - **`## Onde` is `TBD`/empty/absent? DO NOT invent a repository.** Never infer the

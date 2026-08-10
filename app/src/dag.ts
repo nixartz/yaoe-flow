@@ -1,24 +1,77 @@
 // Camada 2 de dependência: colisão de footprint (arquivos que duas tasks tocam).
-// Versão simples por prefixo de path. Para produção, troque por um matcher de glob
-// real (ex.: micromatch) se as tasks usarem padrões mais complexos.
+// Matcher: Bun.Glob — `**` is globstar (zero or more path segments), mid-path `*` is
+// one segment. Dialect: a trailing `/*` means the whole subtree (same as `/**`),
+// matching the SOUL convention `<module>/*` as a directory lock/ceiling.
+import { Glob } from "bun";
 import type { Footprint } from "./types";
 import { isAncillaryScopePath } from "./footprint-ancillary";
 
-function normalize(p: string): string {
-  return p.replace(/\/\*+$/, "").replace(/\/+$/, "");
+function cleanPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function hasGlobMeta(p: string): boolean {
+  return /[*?\[]/.test(p);
+}
+
+/** Trailing `/*` (exactly one star) → `/**` so `<module>/*` covers the whole tree. */
+export function toGlobPattern(entry: string): string {
+  const p = cleanPath(entry);
+  if (/\/\*$/.test(p) && !/\/\*\*$/.test(p)) return `${p.slice(0, -1)}**`;
+  return p;
+}
+
+/** Collapse wildcards to a concrete witness path (for collision membership checks). */
+export function collapseGlobToPath(pattern: string): string {
+  return (
+    cleanPath(pattern)
+      .replace(/\*\*/g, "")
+      .replace(/\*/g, "")
+      .replace(/\/+/g, "/")
+      .replace(/^\//, "")
+      .replace(/\/$/, "") || ""
+  );
+}
+
+function literalPrefix(pattern: string): string {
+  const p = toGlobPattern(pattern);
+  const idx = p.search(/[*?\[]/);
+  return cleanPath(idx === -1 ? p : p.slice(0, idx));
+}
+
+function literalPrefixesNest(a: string, b: string): boolean {
+  const pa = literalPrefix(a);
+  const pb = literalPrefix(b);
+  // Leading globstar / empty literal → conservative: treat as whole-repo under that side.
+  if (pa === "" || pb === "") return true;
+  return pa === pb || pa.startsWith(`${pb}/`) || pb.startsWith(`${pa}/`);
 }
 
 // Um arquivo concreto está "dentro" de uma entrada de footprint?
-// Mesma noção de prefixo/glob de `footprintsCollide`, mas unidirecional
-// (o arquivo precisa estar sob a entrada). Reutilizado pelo scope-check (scope.ts).
-//   isWithinFootprint("src/auth/login.ts", "src/auth/*") → true
-//   isWithinFootprint("src/api/x.ts",      "src/auth/*") → false
-//   isWithinFootprint(qualquer,            "*")          → true (lock de repo inteiro)
+//   isWithinFootprint("src/auth/login.ts", "src/auth/*")           → true (subtree)
+//   isWithinFootprint("src/auth/deep/x.ts", "src/auth/*")          → true (trailing /* = recursive)
+//   isWithinFootprint("src/app/perfil/page.tsx", "src/app/**/perfil/**") → true (** = empty ok)
+//   isWithinFootprint("src/api/x.ts", "src/auth/*")                → false
+//   isWithinFootprint(qualquer, "*")                               → true (lock de repo inteiro)
 export function isWithinFootprint(file: string, footprintEntry: string): boolean {
-  const entry = normalize(footprintEntry);
-  if (entry === "*" || entry === "") return true; // repo inteiro / sem restrição
-  const f = normalize(file);
-  return f === entry || f.startsWith(entry + "/");
+  const entry = cleanPath(footprintEntry);
+  if (entry === "*" || entry === "") return true;
+  const f = cleanPath(file);
+  const pattern = toGlobPattern(entry);
+
+  if (!hasGlobMeta(pattern)) {
+    return f === pattern || f.startsWith(`${pattern}/`);
+  }
+
+  if (new Glob(pattern).match(f)) return true;
+  // `foo/**` does not match the directory node `foo` itself; the old prefix
+  // dialect did. Only apply when the stem has no remaining wildcards (otherwise
+  // `src/app/**/perfil/**` would invent a literal `**` prefix).
+  if (pattern.endsWith("/**")) {
+    const base = pattern.slice(0, -3);
+    if (base && !hasGlobMeta(base) && f === base) return true;
+  }
+  return false;
 }
 
 // Separa o qualificador de repo ("repoA:src/x" → repo "repoA", path "src/x").
@@ -26,8 +79,8 @@ export function isWithinFootprint(file: string, footprintEntry: string): boolean
 // de entriesForRepo em scope.ts), representado por repo = null.
 function splitEntry(entry: string): { repo: string | null; path: string } {
   const idx = entry.indexOf(":");
-  if (idx === -1) return { repo: null, path: normalize(entry) };
-  return { repo: entry.slice(0, idx), path: normalize(entry.slice(idx + 1)) };
+  if (idx === -1) return { repo: null, path: cleanPath(entry) };
+  return { repo: entry.slice(0, idx), path: cleanPath(entry.slice(idx + 1)) };
 }
 
 function entriesCollide(a: string, b: string): boolean {
@@ -37,16 +90,18 @@ function entriesCollide(a: string, b: string): boolean {
   // Se um lado é não-qualificado (null), vale pra qualquer repo → compara paths.
   if (ea.repo !== null && eb.repo !== null && ea.repo !== eb.repo) return false;
   // "*" (ou vazio) = repo inteiro → colide com qualquer path daquele repo. É o
-  // caso do fallback de planning (["*"]), que DEVE serializar tudo — a comparação
-  // por prefixo de string pura tratava "*" como um path comum e não colidia com
-  // nada, o oposto do comportamento pretendido/documentado.
+  // caso do fallback de planning (["*"]), que DEVE serializar tudo.
   if (ea.path === "*" || ea.path === "" || eb.path === "*" || eb.path === "") return true;
-  const pathOverlap =
-    ea.path === eb.path || ea.path.startsWith(eb.path + "/") || eb.path.startsWith(ea.path + "/");
-  if (!pathOverlap) return false;
+
+  const overlap =
+    isWithinFootprint(collapseGlobToPath(ea.path), eb.path) ||
+    isWithinFootprint(collapseGlobToPath(eb.path), ea.path) ||
+    (hasGlobMeta(ea.path) && hasGlobMeta(eb.path) && literalPrefixesNest(ea.path, eb.path));
+  if (!overlap) return false;
   // Overlap SÓ em paths ancillary (locks/config) não serializa — protocolo §8.1.
-  // "*" já retornou acima; aqui só entradas concretas tipo "package-lock.json".
-  if (isAncillaryScopePath(ea.path) && isAncillaryScopePath(eb.path)) return false;
+  const aWitness = collapseGlobToPath(ea.path) || ea.path;
+  const bWitness = collapseGlobToPath(eb.path) || eb.path;
+  if (isAncillaryScopePath(aWitness) && isAncillaryScopePath(bWitness)) return false;
   return true;
 }
 

@@ -30,7 +30,7 @@ Behavior is defined by **SOULs** — versioned system prompts. `agents/*.SOUL.md
 A refined issue contains, in its description/comments:
 
 - **Context & expected result** — what and why, in reviewable form.
-- **`## Footprint`** — `repo:path` globs the implementation may touch. This is simultaneously the collision-lock key and the scope-check ceiling.
+- **`## Footprint`** — `repo:path` globs the implementation may touch. This is simultaneously the collision-lock key and the scope-check ceiling. `**` is globstar; trailing `/*` means the whole subtree.
 - **Dependencies** — Linear blockedBy/blocks relations (the scheduler will not dispatch an issue whose blockers are open).
 - **Out of scope** — explicit guardrails.
 - **Checklist** — acceptance criteria the Reviewer traces against.

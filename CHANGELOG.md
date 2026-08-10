@@ -10,6 +10,7 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ### Fixed
 
+- **Footprint matcher ignored globstar `**`**: scope-check/collision used prefix match after stripping trailing `/*`, so patterns like `src/app/**/perfil/**` never matched `src/app/perfil/...` (INF-23 Reopened loop). Matcher now uses `Bun.Glob` (`**` = globstar; trailing `/*` still means whole subtree). `CHANGELOG.md` and `knowledge/changes/**` are §8.1 ancillary. OKF: [knowledge/changes/2026-08-10/footprint-globstar](knowledge/changes/2026-08-10/footprint-globstar/README.md).
 - **Release binaries shipping a stale dashboard SPA**: `EMBEDDED_DASHBOARD_ASSETS` was committed with a baked UI, so releases could serve old screens. The SPA is no longer committed; release builds `dashboard/` → `embed-assets --require-dashboard` → compile, and CI asserts the git stub stays empty. OKF: [knowledge/changes/2026-08-10/release-dashboard-embed](knowledge/changes/2026-08-10/release-dashboard-embed/README.md).
 
 ## [0.1.5] - 2026-08-10

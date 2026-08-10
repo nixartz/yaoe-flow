@@ -23,6 +23,14 @@ describe("isAncillaryScopePath", () => {
     expect(isAncillaryScopePath("src/audit-log/service.ts")).toBe(false);
     expect(isAncillaryScopePath("src/auth/login.tsx")).toBe(false);
   });
+
+  test("CHANGELOG and OKF change bundles are ancillary", () => {
+    expect(isAncillaryScopePath("CHANGELOG.md")).toBe(true);
+    expect(isAncillaryScopePath("knowledge/changes/2026-08-10/perfil-settings/README.md")).toBe(
+      true
+    );
+    expect(isAncillaryScopePath("knowledge/product/architecture.md")).toBe(false);
+  });
 });
 
 describe("filesOutsideFootprint", () => {

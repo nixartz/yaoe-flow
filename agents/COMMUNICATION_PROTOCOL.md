@@ -224,6 +224,7 @@ declared footprint is **not**, by itself, scope leakage:
 | **Lockfiles** | `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock` / `bun.lockb`, `Cargo.lock`, `go.sum`, `poetry.lock`, `composer.lock`, `Gemfile.lock`, … | Safe to regenerate / discard and re-resolve. A simple diff usually shows whether the change is incidental (dep resolution) vs. a real conflict — fix the conflict, don't Block. |
 | **Toolchain / project config** | `tsconfig.json` (+ `tsconfig.*.json`), `jsconfig.json`, `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`, ESLint/Prettier/Biome/Vitest/Jest configs, `.editorconfig`, `.nvmrc`, `.npmrc`, … | Allowed when the change is needed for the app to **build, typecheck, lint, or run** (flags, path aliases, peer deps, fix warnings that block CI). Not a license to redesign the toolchain. |
 | **Test companions** | `*.test.*` / `*.spec.*`, `__tests__/**`, `test(s)/**`, fixtures/mocks tied to the feature | Adjusting or adding tests because the feature adds a field, connector, mock, or assertion is **expected**. Reject only when the test change is unrelated feature work smuggled in. |
+| **Process docs (OKF)** | `CHANGELOG.md`, `knowledge/changes/**` | Required by the repo's agent guide whenever a feature/fix ships. Do **not** put them in `## Footprint` — they are collateral of almost every change and would false-collide unrelated tasks. |
 
 **Rules for every role:**
 

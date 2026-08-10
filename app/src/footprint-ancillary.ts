@@ -44,5 +44,10 @@ export function isAncillaryScopePath(file: string): boolean {
   if (/\.(test|spec)\.[cm]?[jt]sx?$/i.test(base)) return true;
   if (/(^|\/)(__tests__|__mocks__|tests?|spec)(\/|$)/i.test(normalized)) return true;
 
+  // Process docs required by AGENTS.md / OKF — not feature scope; listing them in
+  // ## Footprint would false-collide every task that ships a change bundle.
+  if (/^CHANGELOG\.md$/i.test(base)) return true;
+  if (/(^|\/)knowledge\/changes(\/|$)/i.test(normalized)) return true;
+
   return false;
 }

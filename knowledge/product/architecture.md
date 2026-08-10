@@ -54,7 +54,7 @@ Behavior lives in **SOULs** (`agents/*.SOUL.md` as seed; database as runtime sou
 
 ## Collision-freedom: footprints and locks
 
-Each issue declares a **footprint** (`repo:path` globs — the files it is allowed to touch). Valkey holds footprint **locks**; the scheduler only dispatches issues whose footprints do not collide with in-flight runs (`app/src/dag.ts`), and the deterministic **scope-check** (`app/src/scope.ts`) rejects PRs whose diff escapes the declared footprint. `AGENT_AUTHORIZED_ORGS` is an anti-fork fail-safe on top. Merges are further serialized by a merge mutex.
+Each issue declares a **footprint** (`repo:path` globs — the files it is allowed to touch). Valkey holds footprint **locks**; the scheduler only dispatches issues whose footprints do not collide with in-flight runs (`app/src/dag.ts`), and the deterministic **scope-check** (`app/src/scope.ts`) rejects PRs whose diff escapes the declared footprint. Glob semantics (`app/src/dag.ts`): `**` is globstar (zero or more segments), mid-path `*` is one segment, and a trailing `/*` means the whole subtree (same as `/**`) so SOUL `<module>/*` entries stay recursive. `AGENT_AUTHORIZED_ORGS` is an anti-fork fail-safe on top. Merges are further serialized by a merge mutex.
 
 ## Harnesses
 
