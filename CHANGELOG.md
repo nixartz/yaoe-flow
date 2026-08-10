@@ -6,6 +6,8 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-10
+
 ### Added
 
 - **`scripts/release.ts`**: one-shot release cutter — bump (`--patch`/`--minor`/`--major` or exact version), promote CHANGELOG `[Unreleased]`, commit, annotated tag, push (triggers GitHub release workflow). Existing tags can be deleted after an explicit prompt or `--replace-tag` (for republishing a broken release). OKF: [knowledge/changes/2026-08-10/release-script](knowledge/changes/2026-08-10/release-script/README.md).
