@@ -15,7 +15,8 @@
     "test:smoke": "bun scripts/smoke-harness.ts",
     "seed:demo": "bun scripts/seed-demo.ts",
     "embed-assets": "bun scripts/generate-embedded-assets.ts",
-    "build:install": "bun ../scripts/build-and-install.ts"
+    "build:install": "bun ../scripts/build-and-install.ts",
+    "release": "bun ../scripts/release.ts"
   },
   "dependencies": {
     "@hono/standard-validator": "^0.3.0",

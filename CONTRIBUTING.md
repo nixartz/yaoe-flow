@@ -85,7 +85,30 @@ Gotcha: **after adding a Drizzle migration or editing a SOUL, run `bun run embed
 
 ## Cutting a release
 
-1. Move the `[Unreleased]` section of `CHANGELOG.md` into a new `## [X.Y.Z] - YYYY-MM-DD` section; bump `version` in `app/package.json`.
-2. Merge that to `main`, then tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. The [release workflow](.github/workflows/release.yml) cross-compiles Linux/macOS/Windows (x64+arm64 where supported), verifies each binary runs on its real platform, and publishes a GitHub Release using the CHANGELOG section as the body.
+Preferred (automated):
+
+```bash
+# from repo root, on main, with a clean tree and notes under [Unreleased]
+bun scripts/release.ts              # patch: 0.1.3 → 0.1.4
+bun scripts/release.ts --minor
+bun scripts/release.ts 0.2.0        # exact version
+bun scripts/release.ts --dry-run    # preview only
+bun scripts/release.ts --yes        # no confirmation prompt
+```
+
+The script bumps `app/package.json` + `dashboard/package.json`, promotes
+`CHANGELOG.md` `[Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`, runs `bun test`,
+commits `release: vX.Y.Z`, creates an annotated tag, and pushes branch + tag
+(unless `--no-push`). The [release workflow](.github/workflows/release.yml) then
+cross-compiles and publishes the GitHub Release.
+
+If `vX.Y.Z` already exists (failed CI, bad asset), the script asks whether to
+delete it (local + `origin`) and recreate; non-interactive use requires
+`--replace-tag` (`--yes` alone does **not** delete tags).
+
+Manual equivalent:
+
+1. Move the `[Unreleased]` section of `CHANGELOG.md` into a new `## [X.Y.Z] - YYYY-MM-DD` section; bump `version` in `app/package.json` and `dashboard/package.json`.
+2. Merge that to `main`, then tag: `git tag -a vX.Y.Z -m "Release vX.Y.Z" && git push origin main vX.Y.Z`.
+3. The release workflow cross-compiles Linux/macOS/Windows (x64+arm64 where supported), verifies each binary runs on its real platform, and publishes a GitHub Release using the CHANGELOG section as the body.
 

@@ -6,6 +6,10 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+### Added
+
+- **`scripts/release.ts`**: one-shot release cutter — bump (`--patch`/`--minor`/`--major` or exact version), promote CHANGELOG `[Unreleased]`, commit, annotated tag, push (triggers GitHub release workflow). Existing tags can be deleted after an explicit prompt or `--replace-tag` (for republishing a broken release). OKF: [knowledge/changes/2026-08-10/release-script](knowledge/changes/2026-08-10/release-script/README.md).
+
 ### Changed
 
 - **Agent editor Integrations / Execution UX**: Integrations uses three equal-height cards (sortable MCP table 2/4 + detail 1/4 + advanced JSON 1/4, `min-h-[660px]`) with drag-and-drop reorder (`@dnd-kit`). Execution tab advanced JSON is also always open. OKF: [knowledge/changes/2026-08-08/agent-integrations-master-detail](knowledge/changes/2026-08-08/agent-integrations-master-detail/README.md).
