@@ -16,6 +16,6 @@
 - [ ] OKF bundle added/updated in `knowledge/changes/<date>/<change-name>/` (features/fix sets)
 - [ ] `CHANGELOG.md` entry under `[Unreleased]`
 - [ ] Docs/README updated if user-visible
-- [ ] `bun run embed-assets` ran if migrations/SOULs changed
+- [ ] `bun run embed-assets -- --no-dashboard` ran if migrations/SOULs changed (do **not** commit a filled SPA embed)
 - [ ] No secrets, no binaries, English only
 

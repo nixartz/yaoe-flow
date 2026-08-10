@@ -43,11 +43,22 @@ bun run dev      # Vite dev server with hot reload, proxying the API
 
 Conventions live in [DESIGN.md](DESIGN.md) (tokens, components, UI rules) — notably: all data via TanStack Query in `src/lib/api.ts`, Tabler icons, badge opacity patterns.
 
-To ship a new dashboard build inside the binary: nothing special — the build scripts run `bun run build` + `bun run embed-assets` for you (next section). If you only changed the SPA and want to refresh the embedded copy manually:
+To ship a new dashboard build inside the binary: use the release workflow or
+`bun scripts/build-and-install.ts` (builds SPA → `embed-assets --require-dashboard`
+→ compile). Do **not** commit `dashboard/dist/` or a non-empty
+`EMBEDDED_DASHBOARD_ASSETS` — the SPA is baked only at release/install time.
+
+Manual local refresh of the embed (for a one-off binary, not for git):
 
 ```bash
 cd dashboard && bun run build
-cd ../app && bun run embed-assets
+cd ../app && bun run embed-assets -- --require-dashboard
+```
+
+After a migration/SOUL change that you will commit:
+
+```bash
+cd app && bun run embed-assets -- --no-dashboard
 ```
 
 ## Build & install a local binary
@@ -70,7 +81,7 @@ cd ../dashboard
 bunx tsc -b            # frontend typecheck
 ```
 
-Gotcha: **after adding a Drizzle migration or editing a SOUL, run `bun run embed-assets`** — dev/tests read migrations from the embedded bundle, not from disk (see `knowledge/rules/migrations-and-embedded-assets.md`).
+Gotcha: **after adding a Drizzle migration or editing a SOUL, run `bun run embed-assets -- --no-dashboard`** — dev/tests read migrations from the embedded bundle, not from disk (see `knowledge/rules/migrations-and-embedded-assets.md`). Never commit a filled SPA embed.
 
 ## PR flow
 

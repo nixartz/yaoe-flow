@@ -185,8 +185,8 @@ export async function buildAndInstall(opts: {
     console.log("ℹ️  --skip-dashboard: reusing existing dashboard/dist.");
   }
 
-  // 3) embed migrations/SOULs/SPA
-  run(bun, ["run", "embed-assets"], APP_DIR);
+  // 3) embed migrations/SOULs/SPA (SPA must be present — same as release CI)
+  run(bun, ["run", "embed-assets", "--", "--require-dashboard"], APP_DIR);
 
   // 4) compile
   mkdirSync(DIST_DIR, { recursive: true });

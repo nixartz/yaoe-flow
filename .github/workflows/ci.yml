@@ -24,13 +24,28 @@ jobs:
       # with the other unit tests (secrets/config/migrations/users/agents/
       # budgets) it runs in seconds.
       - run: bun test
-      # Dashboard: separate typecheck (full build happens in release; here we
+      # Dashboard: separate typecheck (full SPA build happens in release; here we
       # only guarantee the screens compile).
       - name: dashboard typecheck
         working-directory: dashboard
         run: |
           bun install --frozen-lockfile
           bunx tsc -b --pretty false
+
+      # Guardrail: the committed embed stub must not contain a baked SPA
+      # (stale UI would ship if release forgot to rebuild).
+      - name: assert SPA not committed in embed stub
+        working-directory: app
+        run: |
+          bun -e '
+            import { EMBEDDED_DASHBOARD_ASSETS } from "./src/embedded-assets.generated.ts";
+            const n = Object.keys(EMBEDDED_DASHBOARD_ASSETS).length;
+            if (n !== 0) {
+              console.error(`EMBEDDED_DASHBOARD_ASSETS has ${n} entries — run: bun run embed-assets -- --no-dashboard`);
+              process.exit(1);
+            }
+            console.log("ok: SPA embed stub is empty");
+          '
 
   secrets-scan:
     runs-on: ubuntu-latest

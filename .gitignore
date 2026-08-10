@@ -8,6 +8,12 @@ node_modules/
 dist/
 build/
 
+# Dashboard Vite output (also listed in dashboard/.gitignore). The SPA is
+# baked into the binary at release/install-local time via embed-assets — never
+# commit dashboard/dist or a non-empty EMBEDDED_DASHBOARD_ASSETS blob.
+dashboard/dist/
+dashboard/dist-ssr/
+
 # Local runtime state (daemon home lives in ~/.yaoe-flow, but keep repo-local
 # fallbacks ignored too)
 .data/

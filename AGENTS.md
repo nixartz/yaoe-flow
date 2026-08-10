@@ -117,7 +117,7 @@ When a change matters to humans using or onboarding to the repo (structure, scri
 
 - Do not read `process.env` outside `app/src/config/`.
 - Do not bypass the footprint/lock model "just this once" — collision-freedom is the product.
-- Do not edit `app/src/embedded-assets.generated.ts` by hand (run `bun run embed-assets`).
+- Do not edit `app/src/embedded-assets.generated.ts` by hand (run `bun run embed-assets`). Commit migrations/SOULs with `--no-dashboard`; never commit a non-empty `EMBEDDED_DASHBOARD_ASSETS` (SPA is baked at release/install-local only).
 - Do not put always-on rules only in `.cursor/rules` or CLAUDE.md — use `knowledge/rules/` (portable).
 - Do not leave a feature without OKF bundle + CHANGELOG entry.
 

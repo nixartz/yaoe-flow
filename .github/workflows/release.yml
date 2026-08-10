@@ -35,14 +35,37 @@ jobs:
         run: |
           bun install --frozen-lockfile
           bun run build
+          test -f dist/index.html
+          echo "dashboard/dist contents:"
+          find dist -type f | sort
 
       - name: Install app deps
         working-directory: app
         run: bun install --frozen-lockfile
 
+      # Order is load-bearing: compile must see a freshly embedded SPA. The
+      # committed embedded-assets.generated.ts ships EMBEDDED_DASHBOARD_ASSETS={}
+      # on purpose — without this step the binary would have no dashboard UI.
       - name: Embed migrations/SOULs/SPA into the bundle
         working-directory: app
-        run: bun run embed-assets
+        run: bun run embed-assets -- --require-dashboard
+
+      - name: Verify SPA is in the embed (not the empty git stub)
+        working-directory: app
+        run: |
+          bun -e '
+            import { EMBEDDED_DASHBOARD_ASSETS } from "./src/embedded-assets.generated.ts";
+            const keys = Object.keys(EMBEDDED_DASHBOARD_ASSETS);
+            if (keys.length < 1) {
+              console.error("EMBEDDED_DASHBOARD_ASSETS is empty — dashboard was not embedded");
+              process.exit(1);
+            }
+            if (!keys.includes("index.html")) {
+              console.error("index.html missing from embed:", keys);
+              process.exit(1);
+            }
+            console.log("embedded SPA assets:", keys.join(", "));
+          '
 
       - name: Compile binaries (cross-compile)
         working-directory: app
