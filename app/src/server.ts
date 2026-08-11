@@ -14,6 +14,8 @@ import { detectAllHarnesses } from "./agent/harness/detect";
 import { versionInfo } from "./version";
 import { ensureHarnessBinOnPath } from "./cli/setup/harnessDeps";
 import { createOrchestratorApp } from "./api/orchestrator/app";
+import { acquireDaemonInstanceLock, renewDaemonInstanceLock } from "./locks";
+import { closeOrphanRunningRows } from "./dashboard/store";
 /**
  * Sobe o serviço (API Hono + webhook + tick + dashboard + proxy OpenRouter) —
  * o MESMO entrypoint tanto pro boot direto (`bun src/index.ts`, Docker CMD,
@@ -27,7 +29,7 @@ import { createOrchestratorApp } from "./api/orchestrator/app";
  * `yaoe-flow setup` existir) quebrariam só de o binário ser invocado.
  * index.ts importa este módulo dinamicamente, e só no caminho de boot.
  */
-export function bootServer(): void {
+export async function bootServer(): Promise<void> {
   // ── Pré-boot (Fase 0): sem APP_ENCRYPTION_KEY o processo NÃO sobe (§5.2) e o
   // banco (com as migrations) abre ANTES de qualquer coisa ler config do serviço.
   try {
@@ -45,6 +47,35 @@ export function bootServer(): void {
   // estar no PATH deste processo pra detect/spawn achar (sem depender do shell).
   ensureHarnessBinOnPath();
 
+  // ── Instância única (defense in depth) ── Duas cópias do daemon apontando pro
+  // mesmo YAOE_HOME+Valkey (ex.: supervisor reiniciando antes do processo velho
+  // sair) não devem despachar em paralelo. Lease > 1 tick pra sobreviver a um
+  // tick perdido; renovado a cada tick (abaixo). NÃO é um crash — se outra
+  // instância já segura o lock, API/dashboard sobem normalmente, só tick/dispatch
+  // ficam fora até o processo ser reiniciado. Erro de rede (Valkey fora) é
+  // tratado como "desconhecido, segue" (fail-open) — não bloqueia o boot por algo
+  // que já quebraria o resto do daemon de qualquer forma.
+  const daemonLockLeaseMs = () => Math.max(config.tickIntervalMs * 3, 60_000);
+  let instanceLockOwned = true;
+  try {
+    instanceLockOwned = await acquireDaemonInstanceLock(daemonLockLeaseMs());
+  } catch (e) {
+    log.server.warn(errFields(e), "daemon instance lock check failed (valkey unreachable?) — proceeding without exclusivity guarantee");
+  }
+  if (!instanceLockOwned) {
+    log.server.warn(
+      "another live process already holds the daemon instance lock for this YAOE_HOME/Valkey — reconciliation tick and agent dispatch stay OFF on this process until it is restarted (or the other instance stops)"
+    );
+  } else {
+    // Só roda com exclusividade CONFIRMADA: se o lock foi negado (outra
+    // instância viva) ou o check falhou (Valkey inacessível), linhas 'running'
+    // podem pertencer legitimamente a um processo que ainda está de pé.
+    const { closed } = closeOrphanRunningRows();
+    if (closed > 0) {
+      log.server.warn({ closed }, "closed orphan 'running' run rows left by a previous process (no Linear transition — self-heals via reconcileStaleLocks on the next tick)");
+    }
+  }
+
   // LOG_LEVEL editado pela tela Config aplica na hora (hot) — os demais settings
   // são lidos por getter a cada uso e não precisam de hook.
   onSettingChange((key, raw) => {
@@ -57,15 +88,25 @@ export function bootServer(): void {
   // TICK_INTERVAL_MS e ORCHESTRATOR_ENABLED editados pela tela Config valem no
   // PRÓXIMO agendamento, sem restart (hot-reload — §5.4). O kill switch desligado
   // não para o loop, só pula o tick — religar volta a reconciliar sozinho.
+  async function runScheduledTick(): Promise<void> {
+    if (!(config.orchestratorEnabled && instanceLockOwned)) return;
+    try {
+      const stillOwned = await renewDaemonInstanceLock(daemonLockLeaseMs());
+      if (!stillOwned) {
+        instanceLockOwned = false;
+        log.scheduler.error(
+          "daemon instance lock lost (another process took over — this instance missed renewals past the lease) — dispatch/tick disabled until restart"
+        );
+        return;
+      }
+    } catch (e) {
+      log.scheduler.warn(errFields(e), "daemon instance lock renewal failed (valkey unreachable?) — ticking anyway");
+    }
+    await tick().catch((e) => log.scheduler.error(errFields(e), "tick failed"));
+  }
   function scheduleTick(): void {
     setTimeout(() => {
-      if (config.orchestratorEnabled) {
-        tick()
-          .catch((e) => log.scheduler.error(errFields(e), "tick failed"))
-          .finally(scheduleTick);
-      } else {
-        scheduleTick();
-      }
+      runScheduledTick().finally(scheduleTick);
     }, config.tickIntervalMs);
   }
   scheduleTick();

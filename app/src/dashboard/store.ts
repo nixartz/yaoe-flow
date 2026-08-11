@@ -610,6 +610,41 @@ export function finishRun(runId: string, input: FinishRunInput): void {
   });
 }
 
+/**
+ * Boot-time self-heal: a `running` row can only survive a restart if the
+ * process that owned it died without reaching finishRun's `finally` (kill -9,
+ * OOM, crash) — this process's in-memory `activeRuns` and Valkey dispatch
+ * lock are both empty for it. Deliberately DB-only: no Linear transition,
+ * matching `AGENTS.md` ("Linear is the source of truth ... local state is
+ * observability, not authority") — `reconcileStaleLocks()` self-heals the
+ * Linear/Valkey side independently on the next tick.
+ */
+export function closeOrphanRunningRows(): { closed: number } {
+  try {
+    const endedAt = Date.now();
+    const rows = db().query(`SELECT id FROM runs WHERE status = 'running'`).all() as { id: string }[];
+    if (rows.length === 0) return { closed: 0 };
+    db()
+      .query(
+        `UPDATE runs SET status = 'failed',
+                          error_message = COALESCE(error_message, 'orphaned: process restarted while run was in flight'),
+                          ended_at = $endedAt,
+                          duration_ms = $endedAt - started_at
+         WHERE status = 'running'`
+      )
+      .run({ $endedAt: endedAt });
+    for (const { id } of rows) {
+      seqCounters.delete(id);
+      emitRun({ type: "run_finished", runId: id, status: "failed", endedAt, durationMs: null });
+    }
+    log.dashboard.warn({ closed: rows.length, runIds: rows.map((r) => r.id) }, "closed orphan 'running' rows left by a previous process");
+    return { closed: rows.length };
+  } catch (e) {
+    log.dashboard.warn(errFields(e), "closeOrphanRunningRows failed (best-effort)");
+    return { closed: 0 };
+  }
+}
+
 export interface WebhookEventInput {
   entityType: string;
   action?: string;

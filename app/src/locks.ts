@@ -9,6 +9,7 @@
 // Prefixo: connectionId === "default" → `orch:*` (legado single-tenant);
 // demais → `orch:conn:{connectionId}:*` pra não misturar locks entre orgs.
 import Redis from "ioredis";
+import { randomUUID } from "node:crypto";
 import { config } from "./config";
 import { log, errFields } from "./logger";
 import type { Footprint } from "./types";
@@ -41,11 +42,105 @@ function keys(connectionId: string) {
     readiness: `${p}readiness`,
     /** In-flight Orchestrator footprint estimate (SET NX + TTL). */
     estimatingPrefix: `${p}estimating:`,
+    /** Per-issue/role dispatch lease (SET NX + TTL) — cross-process double-dispatch guard. */
+    dispatchingPrefix: `${p}dispatching:`,
   };
 }
 
 /** TTL safety net if the process dies mid-estimate (daemon restart). */
 export const ESTIMATING_TTL_SECONDS = 15 * 60;
+
+/**
+ * TTL safety net if the process dies mid-dispatch without reaching the
+ * `finally` release — must comfortably outlast the longest legitimate run
+ * (IN_PROGRESS_TIMEOUT_MS default is 45min, but that's an *inactivity* clock
+ * that resets on every harness event, so a genuinely long, active run can
+ * exceed it). 2h errs on the side of not stealing a live run's lock.
+ */
+export const DISPATCH_LOCK_TTL_SECONDS = 2 * 3_600;
+
+const RELEASE_DISPATCH_LOCK_IF_OWNER = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end
+`;
+
+/**
+ * Cross-process guard: at most one in-flight dispatch per (connection, issue,
+ * role), even across daemon instances sharing the same Valkey — the in-memory
+ * `activeRuns` map in agent/dispatch.ts only guards within a single process.
+ * Returns an opaque ownership token on success (pass it to
+ * releaseDispatchLock so a lease that already expired and was re-claimed by
+ * another process can't be released out from under it), or null if another
+ * process already holds the lease.
+ */
+export async function tryAcquireDispatchLock(
+  connectionId: string,
+  issueId: string,
+  role: string
+): Promise<string | null> {
+  const key = `${keys(connectionId).dispatchingPrefix}${role}:${issueId}`;
+  const token = randomUUID();
+  const ok = await redis.set(key, token, "EX", DISPATCH_LOCK_TTL_SECONDS, "NX");
+  if (ok === "OK") {
+    log.valkey.info({ connectionId, issueId, role }, "dispatch lock acquired");
+    return token;
+  }
+  log.valkey.warn({ connectionId, issueId, role }, "dispatch lock denied (already held by another process)");
+  return null;
+}
+
+/** No-op if `token` no longer owns the lease (already expired + re-claimed). */
+export async function releaseDispatchLock(
+  connectionId: string,
+  issueId: string,
+  role: string,
+  token: string
+): Promise<void> {
+  const key = `${keys(connectionId).dispatchingPrefix}${role}:${issueId}`;
+  const removed = await redis.eval(RELEASE_DISPATCH_LOCK_IF_OWNER, 1, key, token);
+  if (removed) log.valkey.info({ connectionId, issueId, role }, "dispatch lock released");
+}
+
+// ── Boot-time instance lock ──
+// Defense in depth against two daemons accidentally pointed at the same
+// YAOE_HOME + Valkey (e.g. a supervisor restart racing an old process that
+// hasn't exited yet). Not connection-scoped — one lock for the whole process,
+// renewed on every scheduler tick so a live daemon never loses it, and freed
+// within RENEW-interval-ish of a crash (no renewal ⇒ TTL expiry).
+const DAEMON_LOCK_KEY = "orch:daemon:lock";
+const daemonInstanceToken = randomUUID();
+
+const RENEW_DAEMON_LOCK_IF_OWNER = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  redis.call("pexpire", KEYS[1], ARGV[2])
+  return 1
+else
+  return 0
+end
+`;
+
+/** Best-effort: on a Valkey error, callers should treat this as "unknown" (proceed), not "denied". */
+export async function acquireDaemonInstanceLock(leaseMs: number): Promise<boolean> {
+  const ok = await redis.set(DAEMON_LOCK_KEY, daemonInstanceToken, "PX", leaseMs, "NX");
+  if (ok === "OK") {
+    log.valkey.info({ instanceId: daemonInstanceToken, leaseMs }, "daemon instance lock acquired");
+    return true;
+  }
+  log.valkey.warn(
+    { instanceId: daemonInstanceToken },
+    "daemon instance lock DENIED — another process already holds it against this Valkey; dispatch/tick stay disabled on this instance until it's freed"
+  );
+  return false;
+}
+
+/** Returns false if another instance now owns the lock (this instance lost it — TTL lapsed without renewal). */
+export async function renewDaemonInstanceLock(leaseMs: number): Promise<boolean> {
+  const result = await redis.eval(RENEW_DAEMON_LOCK_IF_OWNER, 1, DAEMON_LOCK_KEY, daemonInstanceToken, leaseMs);
+  return result === 1;
+}
 
 export async function acquireLock(connectionId: string, issueId: string, fp: Footprint): Promise<void> {
   const k = keys(connectionId);

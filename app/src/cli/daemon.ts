@@ -91,7 +91,7 @@ export async function cmdDaemon(flags: Record<string, string | boolean>): Promis
   });
 
   const { bootServer } = await import("../server");
-  bootServer();
+  await bootServer();
 }
 
 function detachAndSpawn(): void {
