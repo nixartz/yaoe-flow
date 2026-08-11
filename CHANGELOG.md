@@ -14,6 +14,7 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 ### Changed
 
 - **A cloned repo's own agent guide is now binding (SOULs + `COMMUNICATION_PROTOCOL.md` §14)**: every role reads `AGENTS.md` → `CLAUDE.md` → `.cursor/rules/*` → `CONTRIBUTING.md`/`PROJECT_MAP.md` → the repo's knowledge/doc directory of **each** cloned repository, right after cloning and before planning — previously the Dev SOUL only asked for `AGENTS.md` when the repo was yaoe-flow itself, so features shipped without the OKF bundles, CHANGELOG entries and feature docs the target repo required. Deliverables the guide demands are part of "done": PMO writes them as per-repo checklist items, Dev announces the guide files in the ▶️ plan and ships the docs in the same PR, Reviewer rejects when they are missing. Same OKF bundle.
+- **Footprint collision matcher no longer over-collides two mid-globstar patterns that share a literal prefix**: `src/app/**/perfil/**` and `src/app/**/billing/**` no longer serialize each other's dispatch — no real path segment can equal both literal next-segments at once, so they're now provably disjoint. Every other collision shape (unequal-but-nesting prefixes, ambiguous next segments) stays conservative. OKF: [knowledge/changes/2026-08-11/footprint-globstar-disjointness](knowledge/changes/2026-08-11/footprint-globstar-disjointness/README.md).
 
 
 

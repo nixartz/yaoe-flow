@@ -37,6 +37,39 @@ function literalPrefixesNest(a: string, b: string): boolean {
   return pa === pb || pa.startsWith(`${pb}/`) || pb.startsWith(`${pa}/`);
 }
 
+/**
+ * The literal segment right after a pattern's FIRST globstar, when that
+ * globstar sits immediately after the literal prefix (prefix, globstar,
+ * segment, ...). Returns null when there's no such globstar, the next
+ * segment is itself a wildcard, or the globstar is trailing (prefix +
+ * globstar alone, which still matches everything under prefix — ambiguous
+ * on purpose).
+ */
+function firstLiteralSegmentAfterLeadingGlobstar(pattern: string): string | null {
+  const p = toGlobPattern(cleanPath(pattern));
+  const prefix = literalPrefix(pattern);
+  const rest = (prefix ? p.slice(prefix.length) : p).replace(/^\//, "");
+  if (!rest.startsWith("**/")) return null;
+  const nextSeg = rest.slice(3).split("/")[0];
+  if (!nextSeg || hasGlobMeta(nextSeg)) return null;
+  return nextSeg;
+}
+
+/**
+ * Narrow, provable disjointness: two patterns sharing the exact same literal
+ * prefix, both followed by `**` then a literal segment — if those segments
+ * differ, no single path can satisfy both (a path segment can't equal two
+ * different literal strings at once). Anything else (nested-but-unequal
+ * prefixes, a `*`/`**` in that position) stays conservative (collides).
+ */
+function disjointAfterSharedGlobstar(a: string, b: string): boolean {
+  if (literalPrefix(a) !== literalPrefix(b)) return false;
+  const segA = firstLiteralSegmentAfterLeadingGlobstar(a);
+  const segB = firstLiteralSegmentAfterLeadingGlobstar(b);
+  if (segA === null || segB === null) return false;
+  return segA !== segB;
+}
+
 // Separa o qualificador de repo ("repoA:src/x" → repo "repoA", path "src/x").
 // Entrada sem ":" é legado mono-repo — vale para QUALQUER repo (mesma semântica
 // de entriesForRepo em scope.ts), representado por repo = null.
@@ -59,7 +92,10 @@ function entriesCollide(a: string, b: string): boolean {
   const overlap =
     isWithinFootprint(collapseGlobToPath(ea.path), eb.path) ||
     isWithinFootprint(collapseGlobToPath(eb.path), ea.path) ||
-    (hasGlobMeta(ea.path) && hasGlobMeta(eb.path) && literalPrefixesNest(ea.path, eb.path));
+    (hasGlobMeta(ea.path) &&
+      hasGlobMeta(eb.path) &&
+      literalPrefixesNest(ea.path, eb.path) &&
+      !disjointAfterSharedGlobstar(ea.path, eb.path));
   if (!overlap) return false;
   // Overlap SÓ em paths ancillary (locks/config) não serializa — protocolo §8.1.
   const aWitness = collapseGlobToPath(ea.path) || ea.path;

@@ -108,4 +108,29 @@ describe("footprintsCollide with globstar", () => {
     expect(collapseGlobToPath("src/app/**/perfil/**")).toBe("src/app/perfil");
     expect(collapseGlobToPath("src/auth/*")).toBe("src/auth");
   });
+
+  test("two mid-globstar patterns with different literal next-segment do not false-collide", () => {
+    // Same literal prefix (src/app), both followed by **/<literal>/** — no real
+    // path segment can equal both "perfil" and "billing" at once.
+    expect(
+      footprintsCollide(["app:src/app/**/perfil/**"], ["app:src/app/**/billing/**"])
+    ).toBe(false);
+    expect(
+      footprintsCollide(["app:src/app/**/perfil/**"], ["app:src/app/**/perfil-extra/**"])
+    ).toBe(false);
+  });
+
+  test("a bare trailing ** still conservatively collides with a deeper globstar under it", () => {
+    // src/app/** alone matches everything under src/app, including .../perfil/... —
+    // the "next segment" is ambiguous (it IS the globstar), so stay conservative.
+    expect(footprintsCollide(["app:src/app/**"], ["app:src/app/**/perfil/**"])).toBe(true);
+  });
+
+  test("still conservative when literal prefixes only nest (not exactly equal)", () => {
+    // prefix "src/app" vs "src/app/legacy" — not the same globstar boundary,
+    // no provable disjointness, stays conservative.
+    expect(
+      footprintsCollide(["app:src/app/**/perfil/**"], ["app:src/app/legacy/**/billing/**"])
+    ).toBe(true);
+  });
 });
