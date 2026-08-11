@@ -1,9 +1,24 @@
 /**
- * Paths ancillary (protocolo §8.1): colateral esperado de quase qualquer mudança.
- * Usado pelo scope-check e pelo matcher de colisão — módulo isolado pra evitar
- * ciclo dag ↔ scope.
+ * Ancillary paths (protocol §8.1): expected collateral of almost any change.
+ * Used by the scope-check and by the collision matcher — kept in its own module
+ * to avoid a dag ↔ scope cycle.
+ *
+ * Lockfiles / toolchain / test companions are recognized by NAME PATTERN (they
+ * are universal). Process docs — change bundle, OKF, CHANGELOG, ADR — are not:
+ * they follow each repo's own convention (its `AGENTS.md`/`CLAUDE.md`, protocol
+ * §14) — `knowledge/changes/**` here, `docs/changes/**` or `.okf/**` elsewhere.
+ * Hence SCOPE_ANCILLARY_DOC_PATHS (ENV > db > default) instead of a hardcoded
+ * list: with the wrong paths the scope-check rejects exactly the documentation
+ * the repo's guide ordered the agent to write.
  */
-export function isAncillaryScopePath(file: string): boolean {
+import { config } from "./config";
+import { isWithinFootprint } from "./footprint-glob";
+
+export function isAncillaryScopePath(
+  file: string,
+  /** Doc-glob override (tests / callers outside the service). */
+  docPaths?: readonly string[]
+): boolean {
   const normalized = file.replace(/\\/g, "/");
   const base = normalized.includes("/") ? normalized.slice(normalized.lastIndexOf("/") + 1) : normalized;
 
@@ -44,10 +59,23 @@ export function isAncillaryScopePath(file: string): boolean {
   if (/\.(test|spec)\.[cm]?[jt]sx?$/i.test(base)) return true;
   if (/(^|\/)(__tests__|__mocks__|tests?|spec)(\/|$)/i.test(normalized)) return true;
 
-  // Process docs required by AGENTS.md / OKF — not feature scope; listing them in
-  // ## Footprint would false-collide every task that ships a change bundle.
-  if (/^CHANGELOG\.md$/i.test(base)) return true;
-  if (/(^|\/)knowledge\/changes(\/|$)/i.test(normalized)) return true;
+  // Process docs required by the repo's own agent guide (AGENTS.md / CLAUDE.md →
+  // OKF bundle, CHANGELOG, ADR). Not feature scope; listing them in ## Footprint
+  // would false-collide every task that ships a change bundle.
+  const patterns = docPaths ?? config.scope.ancillaryDocPaths;
+  return patterns.some((pattern) => matchesDocPattern(normalized, pattern));
+}
 
-  return false;
+/**
+ * Every pattern matches root-anchored AND at any depth — `CHANGELOG.md` also
+ * covers `apps/web/CHANGELOG.md`, `knowledge/changes/**` also covers
+ * `packages/api/knowledge/changes/...`. A monorepo keeps one change bundle per
+ * package, and the scope-check sees paths relative to the PR repo's root.
+ * Write `./CHANGELOG.md` to anchor for real.
+ */
+function matchesDocPattern(file: string, pattern: string): boolean {
+  if (pattern.startsWith("./")) return isWithinFootprint(file, pattern.slice(2));
+  if (isWithinFootprint(file, pattern)) return true;
+  if (pattern.startsWith("**/")) return false;
+  return isWithinFootprint(file, `**/${pattern}`);
 }

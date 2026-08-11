@@ -26,6 +26,7 @@ for (const key of [
   "LOG_LEVEL",
   "DASHBOARD_USER",
   "DASHBOARD_PASSWORD",
+  "SCOPE_ANCILLARY_DOC_PATHS",
 ]) {
   delete process.env[key];
 }

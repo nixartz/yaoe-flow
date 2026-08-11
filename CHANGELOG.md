@@ -6,6 +6,17 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+### Added
+
+- **`yaoe-flow sync-souls` + dashboard button "Aplicar SOUL padrão"**: re-import the SOULs bundled with the running binary into the database. Until now the seed only ran on an empty `agents` table, so an upgrade that changed agent behavior never reached an existing install (the only workaround was pasting each SOUL into a new version by hand). Both surfaces show a read-only plan first — per role, active version vs. bundled SOUL with content hash and line counts — and write only after confirmation (`--yes` for scripts, `--role` for a subset; a non-TTY without `--yes` refuses). The replaced SOUL is kept in the agent's version history and can be reactivated; local dashboard edits are not merged. No restart needed. OKF: [knowledge/changes/2026-08-11/soul-sync](knowledge/changes/2026-08-11/soul-sync/README.md).
+- **`SCOPE_ANCILLARY_DOC_PATHS`** (Config → GitHub & security): comma-separated globs telling the deterministic scope-check which process-doc paths are ancillary (change bundles / OKF / CHANGELOG / ADRs). Previously hardcoded to this repo's layout, so projects storing change bundles elsewhere (`docs/changes/**`, `.okf/**`, `configdocs/**`) had their required documentation rejected as out-of-footprint. Patterns use the footprint dialect and also match at any depth (monorepo packages); `*`/`**`/absolute paths are rejected. OKF: [knowledge/changes/2026-08-11/repo-conventions-binding](knowledge/changes/2026-08-11/repo-conventions-binding/README.md).
+
+### Changed
+
+- **A cloned repo's own agent guide is now binding (SOULs + `COMMUNICATION_PROTOCOL.md` §14)**: every role reads `AGENTS.md` → `CLAUDE.md` → `.cursor/rules/*` → `CONTRIBUTING.md`/`PROJECT_MAP.md` → the repo's knowledge/doc directory of **each** cloned repository, right after cloning and before planning — previously the Dev SOUL only asked for `AGENTS.md` when the repo was yaoe-flow itself, so features shipped without the OKF bundles, CHANGELOG entries and feature docs the target repo required. Deliverables the guide demands are part of "done": PMO writes them as per-repo checklist items, Dev announces the guide files in the ▶️ plan and ships the docs in the same PR, Reviewer rejects when they are missing. Same OKF bundle.
+
+
+
 ## [0.1.6] - 2026-08-10
 
 ### Fixed

@@ -206,6 +206,20 @@ export const config = {
     },
   },
 
+  // Deterministic scope-check (src/scope.ts) — what it lets through outside the
+  // footprint besides locks/config/tests: the process docs each repo's AGENTS.md
+  // / CLAUDE.md requires with every change (protocol §8.1/§14). Configurable
+  // because every project stores its change bundle somewhere else.
+  scope: {
+    get ancillaryDocPaths() {
+      return svc
+        .str("SCOPE_ANCILLARY_DOC_PATHS")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    },
+  },
+
   capacity: {
     get maxPmoWorkers() {
       return svc.num("MAX_PMO_WORKERS");

@@ -41,6 +41,18 @@ For org-wide installs with short-lived installation tokens, configure a GitHub A
 
 `AGENT_AUTHORIZED_ORGS` (comma-separated owners) is a hard allowlist: when set, no PR from an owner outside the list passes the scope-check, even if a (possibly manipulated) issue points elsewhere. Recommended for any real deployment.
 
+## Process docs and the scope-check
+
+The deterministic scope-check rejects any PR file outside the issue's `## Footprint`, except **ancillary** paths (protocol §8.1): lockfiles, toolchain config, test companions — and the **process docs** your repo's `AGENTS.md`/`CLAUDE.md` requires with every change (change bundle / OKF entry, `CHANGELOG.md`, ADRs).
+
+Which doc paths count is set by **`SCOPE_ANCILLARY_DOC_PATHS`** (Config screen or ENV), a comma-separated glob list using the same dialect as the footprint (`**` = globstar, trailing `/*` = whole subtree; each pattern also matches at any depth, for monorepo packages). The default covers the most common layouts (`CHANGELOG.md`, `knowledge/changes/**`, `docs/changes/**`, `.okf/**`, `adr/**`, `.changeset/**`); point it at whatever your repos actually use:
+
+```bash
+SCOPE_ANCILLARY_DOC_PATHS=CHANGELOG.md,docs/changes/**,configdocs/**
+```
+
+Get this wrong and the pipeline reopens tasks for the very documentation it asked the agent to write. Keep it to process docs: a broad entry such as `docs/**` also removes those paths from footprint collision, so two tasks editing them stop serializing.
+
 ## How agents authenticate git
 
 Per run, the harness environment receives the token via `url.https://x-access-token:<token>@github.com/.insteadOf` git config — the agent never sees a long-lived credential file, `~/.git-credentials` of the host is never exposed, and each run's HOME is isolated (see [harnesses.md](harnesses.md)).

@@ -50,7 +50,7 @@ To Do ──► Refining ──► Planned ──► In Progress ──► Code 
 | Reviewer | Code Review | `MAX_REVIEWER_WORKERS` | Read-only audit: traceability, scope (diff ⊆ footprint), bugs, security. Approves or reopens. |
 | Orchestrator | Pending Merge (+label) & planning | `MAX_ORCHESTRATOR_WORKERS` | Footprint planning (JSON-only reply) and the final merge, serialized by a mutex. |
 
-Behavior lives in **SOULs** (`agents/*.SOUL.md` as seed; database as runtime source of truth) concatenated with `agents/COMMUNICATION_PROTOCOL.md` — the pipeline contract shared by every role. Human-facing output language is configurable (`AGENT_OUTPUT_LANGUAGE`). Agents reserve `🙋` + Linear **Blocked** for protocol §5 (product/safety/access / empty repo); within a named repo they prefer `📝` + proceed. Scheduler footprint locks only delay dispatch — they are not a Blocked transition.
+Behavior lives in **SOULs** (`agents/*.SOUL.md` as seed; database as runtime source of truth) concatenated with `agents/COMMUNICATION_PROTOCOL.md` — the pipeline contract shared by every role. The seed only populates an EMPTY `agents` table, so an upgrade never rewrites a tuned SOUL by itself: bringing the bundled SOULs into an existing install is an explicit, confirmed step (`yaoe-flow sync-souls` or Agents → *Aplicar SOUL padrão*), and it appends a new active version while keeping the replaced one in history (`app/src/agent/soulSync.ts`). Human-facing output language is configurable (`AGENT_OUTPUT_LANGUAGE`). Agents reserve `🙋` + Linear **Blocked** for protocol §5 (product/safety/access / empty repo); within a named repo they prefer `📝` + proceed. Scheduler footprint locks only delay dispatch — they are not a Blocked transition.
 
 ## Collision-freedom: footprints and locks
 

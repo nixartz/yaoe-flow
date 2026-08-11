@@ -47,6 +47,48 @@ function positiveInt(label: string, min = 1): (v: string) => string | null {
   };
 }
 
+/**
+ * Process-doc paths (change bundles / OKF / CHANGELOG) that are ancillary by
+ * default — see SCOPE_ANCILLARY_DOC_PATHS. Kept HERE, in the config family, so
+ * footprint-ancillary.ts can read it through the facade without a cycle
+ * (registry → footprint-ancillary → config → registry).
+ *
+ * Deliberately NOT a blanket `docs/**`: a repo whose docs ARE the product would
+ * lose both scope-check and footprint collision on them. Installs with another
+ * layout widen the setting instead.
+ */
+export const DEFAULT_ANCILLARY_DOC_PATHS = [
+  "CHANGELOG.md",
+  "CHANGELOG/**",
+  "changelog.d/**",
+  "knowledge/changes/**",
+  "docs/changes/**",
+  ".changes/**",
+  ".changeset/**",
+  ".okf/**",
+  "okf/**",
+  "adr/**",
+  "docs/adr/**",
+  "docs/decisions/**",
+] as const;
+
+/** Comma-separated glob list: rejects entries that would swallow the whole repo. */
+function globList(label: string): (v: string) => string | null {
+  return (v) => {
+    const entries = v
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const entry of entries) {
+      if (entry === "*" || entry === "**" || entry === "/" || entry === ".")
+        return `${label}: "${entry}" would make EVERY file ancillary and disable the scope-check — use concrete doc paths`;
+      if (entry.startsWith("/") || entry.includes(".."))
+        return `${label}: "${entry}" must be a repo-relative path without ".."`;
+    }
+    return null;
+  };
+}
+
 function nonNegativeInt(label: string): (v: string) => string | null {
   return (v) => {
     const n = Number(v);
@@ -270,6 +312,16 @@ const githubGroup: SettingMeta[] = [
     scope: "config",
     description:
       "Anti-fork fail-safe: comma-separated list of GitHub orgs/owners the agents may operate on. When set, no PR from an owner outside the list passes the scope-check — even if the issue points there. Empty = no extra guard.",
+  },
+  {
+    key: "SCOPE_ANCILLARY_DOC_PATHS",
+    group: "GitHub & security",
+    type: "string",
+    default: DEFAULT_ANCILLARY_DOC_PATHS.join(","),
+    scope: "config",
+    validate: globList("SCOPE_ANCILLARY_DOC_PATHS"),
+    description:
+      "Comma-separated glob list of PROCESS DOC paths the deterministic scope-check treats as ancillary (protocol §8.1/§14): change bundles, OKF entries, CHANGELOG, ADRs — the docs a repo's AGENTS.md/CLAUDE.md requires with every change. They are collateral of almost any task, so they never count as scope leakage and never serialize two tasks by collision. Same glob dialect as the footprint (`**` = globstar, trailing `/*` = whole subtree). Set this to whatever YOUR repos use (e.g. `docs/changes/**`, `.okf/**`) — the default only covers the most common layouts. Broad entries (e.g. `docs/**`) also disable footprint collision on those paths, so keep it to process docs, not product code.",
   },
 ];
 

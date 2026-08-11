@@ -2,24 +2,14 @@
 // Matcher: Bun.Glob — `**` is globstar (zero or more path segments), mid-path `*` is
 // one segment. Dialect: a trailing `/*` means the whole subtree (same as `/**`),
 // matching the SOUL convention `<module>/*` as a directory lock/ceiling.
-import { Glob } from "bun";
+// The matcher itself lives in footprint-glob.ts (shared with
+// footprint-ancillary.ts, which also matches globs) — re-exported here because
+// scope.ts and the tests import `isWithinFootprint`/`toGlobPattern` from this module.
 import type { Footprint } from "./types";
 import { isAncillaryScopePath } from "./footprint-ancillary";
+import { cleanPath, hasGlobMeta, isWithinFootprint, toGlobPattern } from "./footprint-glob";
 
-function cleanPath(p: string): string {
-  return p.replace(/\\/g, "/").replace(/\/+$/, "");
-}
-
-function hasGlobMeta(p: string): boolean {
-  return /[*?\[]/.test(p);
-}
-
-/** Trailing `/*` (exactly one star) → `/**` so `<module>/*` covers the whole tree. */
-export function toGlobPattern(entry: string): string {
-  const p = cleanPath(entry);
-  if (/\/\*$/.test(p) && !/\/\*\*$/.test(p)) return `${p.slice(0, -1)}**`;
-  return p;
-}
+export { isWithinFootprint, toGlobPattern } from "./footprint-glob";
 
 /** Collapse wildcards to a concrete witness path (for collision membership checks). */
 export function collapseGlobToPath(pattern: string): string {
@@ -45,33 +35,6 @@ function literalPrefixesNest(a: string, b: string): boolean {
   // Leading globstar / empty literal → conservative: treat as whole-repo under that side.
   if (pa === "" || pb === "") return true;
   return pa === pb || pa.startsWith(`${pb}/`) || pb.startsWith(`${pa}/`);
-}
-
-// Um arquivo concreto está "dentro" de uma entrada de footprint?
-//   isWithinFootprint("src/auth/login.ts", "src/auth/*")           → true (subtree)
-//   isWithinFootprint("src/auth/deep/x.ts", "src/auth/*")          → true (trailing /* = recursive)
-//   isWithinFootprint("src/app/perfil/page.tsx", "src/app/**/perfil/**") → true (** = empty ok)
-//   isWithinFootprint("src/api/x.ts", "src/auth/*")                → false
-//   isWithinFootprint(qualquer, "*")                               → true (lock de repo inteiro)
-export function isWithinFootprint(file: string, footprintEntry: string): boolean {
-  const entry = cleanPath(footprintEntry);
-  if (entry === "*" || entry === "") return true;
-  const f = cleanPath(file);
-  const pattern = toGlobPattern(entry);
-
-  if (!hasGlobMeta(pattern)) {
-    return f === pattern || f.startsWith(`${pattern}/`);
-  }
-
-  if (new Glob(pattern).match(f)) return true;
-  // `foo/**` does not match the directory node `foo` itself; the old prefix
-  // dialect did. Only apply when the stem has no remaining wildcards (otherwise
-  // `src/app/**/perfil/**` would invent a literal `**` prefix).
-  if (pattern.endsWith("/**")) {
-    const base = pattern.slice(0, -3);
-    if (base && !hasGlobMeta(base) && f === base) return true;
-  }
-  return false;
 }
 
 // Separa o qualificador de repo ("repoA:src/x" → repo "repoA", path "src/x").

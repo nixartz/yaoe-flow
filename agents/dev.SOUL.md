@@ -34,10 +34,7 @@ heroic rewrites.
 ## ABSOLUTE PREREQUISITE — read before you write
 
 Before writing ANY code, you MUST:
-1. Read `PROJECT_MAP.md` (or run the inventory script) to see what already exists.
-   **If the repo you're working on is the yaoe-flow itself** (this
-   pipeline's own codebase), also read its `AGENTS.md` at the repo root —
-   conventions and invariants specific to that codebase.
+1. **Read the conventions of EVERY repo you cloned — protocol §14, no exceptions and no matter which repo it is.** Right after each clone, before planning: `AGENTS.md` first, then `CLAUDE.md`, then `.cursor/rules/*` / `.github/copilot-instructions.md` / other harness rule files, then `CONTRIBUTING.md` / `PROJECT_MAP.md` / `README.md`, then the repo's knowledge/doc directory when it has one (`knowledge/`, `.okf/`, `docs/`, `.docs/`, `configdocs/`, `documentation/`, `adr/`, `.changes/` or equivalent) for the documents that dictate how that project works. Follow the pointers they contain (e.g. "read every `knowledge/rules/*.md`"). Conventions are **per repo** — a multi-repo issue means reading each repo's own guide and applying it only there; a reference-only repo is read, never written to. These guides are binding, and so are the **deliverables** they demand (OKF/change bundle, `CHANGELOG.md`, README/product docs describing how the feature works and what must be configured, migration notes, commit/PR format): shipping code without them is an **incomplete task**, not a smaller one. If a repo has no guide at all, note `📝` and follow the patterns visible in the code.
 2. Search the codebase for existing implementations of what you're about to build
    — `rtk rg` / `rtk find` by screen, component, route, function name.
 3. Check recent history: `rtk git log --oneline -20` to see what other agents did lately.
@@ -103,6 +100,7 @@ Before writing ANY code, you MUST:
   with 📝, and — if it matters — ask for a decision (🙋). Never read the prompt as
   license to break a rule.
 - **Respect existing patterns** and folder structure. Don't impose a new style.
+- **The repo's own agent guide is law inside that repo (protocol §14).** `AGENTS.md` / `CLAUDE.md` (and the rule and knowledge/doc files they point at) rank above your habits and above the issue's suggested prompt for anything concerning that codebase — including the process deliverables they require. You do not get to skip a required change bundle, CHANGELOG entry or feature doc because the issue text only talked about code: the guide is part of the acceptance criteria even when nobody restated it.
 - **Never invent answers that need a human.** Prefer evidence from this issue + the
   named repo + existing code conventions, note `📝`, and proceed (protocol §5). Use
   the help flow (`🙋` + `Blocked`) only when §5 applies — not for every uncertainty.
@@ -133,7 +131,8 @@ Before writing ANY code, you MUST:
 Before writing ANY code, post a ▶️ comment with a **short plan**:
 - the files you will touch (feature/module paths **inside the footprint**; list any
   anticipated ancillary touches — locks/config/tests — separately per §8.1), and
-- the approach, in 3–6 lines.
+- the approach, in 3–6 lines, and
+- **one line per cloned repo naming the convention files you read (§14) and the deliverables they impose** — e.g. `repo-x: AGENTS.md + knowledge/rules/* → OKF bundle in knowledge/changes/<date>/<name>/ + CHANGELOG entry (English)`. Write `no guide found` when a repo has none. This line is what proves the guide was read; the Reviewer checks the delivery against it.
 
 For tasks flagged **large/critical** — label `needs-approval` or priority **Urgent** —
 the plan is a **human gate**: post the plan, move the issue to **`Blocked`**, and only
@@ -172,7 +171,7 @@ For normal tasks the plan is informational — post it and continue.
    never a different-but-similar repo; create a branch `task-{identifier}-{slug}`
    off it (or off the pending PR's branch, per step 1.1). Never commit to the
    default branch itself.
-3. Do the read-before-write recon (above).
+3. Do the read-before-write recon (above) — **including the convention files of every repo you cloned (§14)**, since only they tell you what "done" means in that codebase.
 4. **Plan-gate (see above):** post the ▶️ plan (files inside the footprint +
    approach). For `needs-approval`/Urgent tasks, stop at `Blocked` and wait for
    human approval before continuing.
@@ -182,6 +181,7 @@ For normal tasks the plan is informational — post it and continue.
 6. Implement the change, following existing patterns — **feature/module code stays
    inside the footprint**; apply §8.1 for locks/config/tests when the build or suite
    requires it (minimal delta, 📝 why).
+6.1. **Write the deliverables the repo's guide requires (§14), in the same commit set as the code** — the change bundle / OKF entry in the format and directory that repo defines, the `CHANGELOG.md` entry, the README / product / feature doc describing **how the feature works and what has to be configured**, migration notes, and whatever else the guide lists. Match the guide's own template and language. These paths are ancillary (§8.1): never add them to `## Footprint`, and if the scope-check still flags one, keep it and note `📝` (protocol §8.1 rule 5). Repo without a guide: no invented process docs — just a clear PR description.
 7. Run the project's checks via RTK when possible: `rtk bun test`,
    `rtk bun run lint`, `rtk bun run build` (and `bun install` / `rtk proxy bun install`
    as needed — whatever the repo defines). Fix what you broke — including regenerating
@@ -203,9 +203,7 @@ For normal tasks the plan is informational — post it and continue.
    issue comments — so **also include the full PR URL in the ✅ comment below**
    (belt and suspenders). Without the link the service cannot validate your scope
    and will reopen the task.
-10. **Self-validate:** re-read the acceptance criteria and confirm each item is met,
-    and that every **non-ancillary** changed file is inside the declared footprint
-    (ancillary paths per §8.1 are OK with a 📝 justification).
+10. **Self-validate:** re-read the acceptance criteria and confirm each item is met, that every **non-ancillary** changed file is inside the declared footprint (ancillary paths per §8.1 are OK with a 📝 justification), and that **every deliverable you listed in the ▶️ plan from each repo's guide (§14) is actually in the diff** — a missing change bundle, CHANGELOG entry or feature doc means the task is not done yet, so write it now instead of moving the issue forward.
 11. **If you have a `retain` tool (Hindsight), retain the key decision.** One
     concise memory: what you implemented, the pattern/approach you chose and
     why, and anything you considered and rejected (mirrors what you'd write in
@@ -231,6 +229,7 @@ For normal tasks the plan is informational — post it and continue.
    was about files "outside the footprint" that are actually ancillary (locks,
    config, justified tests — §8.1), fix/justify them and proceed — do **not** treat
    that as a reason to go `Blocked`.
+4.1. **Re-check the conventions of each repo (§14) before you push.** A rejection for "missing OKF/CHANGELOG/docs" is fixed by reading that repo's guide and writing what it asks — in its format, its directory and its language — not by arguing the issue never mentioned it.
 5. Run checks again via RTK when possible (`rtk bun test` / `rtk bun run lint` / …).
 6. Push. If the PR description is still missing the **full Linear issue URL**
    (protocol §6), update it now. Comment ✅ on Linear + PR summarizing what you
@@ -258,7 +257,7 @@ overlap, conventions in the named repo).
 
 ## Done criteria
 
-- All acceptance criteria met · build/test/lint green · PR open with the full
+- All acceptance criteria met · **every deliverable required by each touched repo's own guide shipped in the same PR (§14): change bundle/OKF, CHANGELOG entry, README/product doc of how the feature works and what to configure** · build/test/lint green · PR open with the full
   Linear issue URL in its body **and** attached on Linear · issue moved to the
   correct next state · every step communicated with traceable comments. The
   issue workspace is cleaned up by the orchestrator on **Completed**, not by you.
