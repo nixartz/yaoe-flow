@@ -626,10 +626,18 @@ function McpsTab({
   agentId,
   harnessId,
   config,
+  selectedId,
+  onSelectId,
+  rowIds,
+  onRowIdsChange,
 }: {
   agentId: string;
   harnessId: string;
   config: AgentHarnessConfig | undefined;
+  selectedId: string | null;
+  onSelectId: (id: string | null) => void;
+  rowIds: string[];
+  onRowIdsChange: (ids: string[]) => void;
 }) {
   const qc = useQueryClient();
   const [json, setJson] = useState(config?.mcpServersJson ?? "[]");
@@ -670,6 +678,10 @@ function McpsTab({
           setJson(v);
           setOk(false);
         }}
+        selectedId={selectedId}
+        onSelectId={onSelectId}
+        rowIds={rowIds}
+        onRowIdsChange={onRowIdsChange}
       />
       <StickySaveBar
         dirtyCount={dirty ? 1 : 0}
@@ -696,6 +708,12 @@ export function AgentEditor() {
     queryFn: () => agentsApi.get(id!),
     enabled: !!id,
   });
+
+  // Selection (and its row ids) is per-harness so switching harnesses (Execução tab) doesn't lose
+  // which MCP row was picked. Row ids are lifted too, not just the selection — see the comment on
+  // McpServersEditor's `rowIds` prop for why (Radix Tabs remounts McpServersEditor on every tab switch).
+  const [mcpSelection, setMcpSelection] = useState<Record<string, string | undefined>>({});
+  const [mcpRowIds, setMcpRowIds] = useState<Record<string, string[] | undefined>>({});
 
   if (isLoading) return <PageSkeleton rows={6} />;
   if (isError || !data) {
@@ -740,7 +758,19 @@ export function AgentEditor() {
           />
         </TabsContent>
         <TabsContent value="mcps">
-          <McpsTab agentId={data.agent.id} harnessId={data.agent.activeHarnessId} config={activeHarnessConfig} />
+          <McpsTab
+            agentId={data.agent.id}
+            harnessId={data.agent.activeHarnessId}
+            config={activeHarnessConfig}
+            selectedId={mcpSelection[data.agent.activeHarnessId] ?? null}
+            onSelectId={(id) =>
+              setMcpSelection((prev) => ({ ...prev, [data.agent.activeHarnessId]: id ?? undefined }))
+            }
+            rowIds={mcpRowIds[data.agent.activeHarnessId] ?? []}
+            onRowIdsChange={(ids) =>
+              setMcpRowIds((prev) => ({ ...prev, [data.agent.activeHarnessId]: ids }))
+            }
+          />
         </TabsContent>
       </Tabs>
     </div>

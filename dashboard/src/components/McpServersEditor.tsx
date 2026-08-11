@@ -492,29 +492,45 @@ const MCP_PANEL_MIN_H = "min-h-[660px]";
 export function McpServersEditor({
   value,
   onChange,
+  selectedId,
+  onSelectId,
+  rowIds,
+  onRowIdsChange,
 }: {
   /** JSON string (mcpServersJson). */
   value: string;
   onChange: (json: string) => void;
+  /** Controlled row selection — lifted by the caller so it survives e.g. a harness switch (see AgentEditor). */
+  selectedId: string | null;
+  onSelectId: (id: string | null) => void;
+  /**
+   * Controlled row ids — also lifted (not just `selectedId`): Radix `Tabs` unmounts inactive
+   * `TabsContent` by default, so this component remounts on every tab switch. If `rowIds` stayed
+   * component-local, a fresh remount would regenerate random ids and `selectedId` would never
+   * match one again, silently resetting the selection despite being "persisted".
+   */
+  rowIds: string[];
+  onRowIdsChange: (ids: string[]) => void;
 }) {
   const parsed = useMemo(() => parseMcps(value), [value]);
   const [advancedError, setAdvancedError] = useState<string | null>(null);
   const items = parsed.ok ? parsed.items : [];
-  const [rowIds, setRowIds] = useState<string[]>(() => Array.from({ length: items.length }, () => newRowId()));
-  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Mantém IDs estáveis alinhados ao comprimento da lista (add/remove / JSON avançado).
   const syncedIds = reconcileRowIds(rowIds, items.length);
   if (syncedIds !== rowIds) {
-    setRowIds(syncedIds);
+    onRowIdsChange(syncedIds);
   }
 
   useEffect(() => {
     if (syncedIds.length === 0) {
-      setSelectedId(null);
+      if (selectedId !== null) onSelectId(null);
       return;
     }
-    setSelectedId((prev) => (prev && syncedIds.includes(prev) ? prev : syncedIds[0]!));
+    if (!selectedId || !syncedIds.includes(selectedId)) onSelectId(syncedIds[0]!);
+    // Only re-run when the row id set changes — re-validating `selectedId` here as a dep
+    // would fight the controlled prop update this effect itself triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncedIds]);
 
   const sensors = useSensors(
@@ -527,7 +543,7 @@ export function McpServersEditor({
 
   const updateItems = (next: McpDraft[], nextIds?: string[]) => {
     onChange(serializeMcps(next));
-    if (nextIds) setRowIds(nextIds);
+    if (nextIds) onRowIdsChange(nextIds);
     setAdvancedError(null);
   };
 
@@ -553,7 +569,7 @@ export function McpServersEditor({
     if (!preset) return;
     const id = newRowId();
     updateItems([...items, preset.make()], [...syncedIds, id]);
-    setSelectedId(id);
+    onSelectId(id);
   };
 
   const removeSelected = () => {
@@ -627,7 +643,7 @@ export function McpServersEditor({
                             id={id}
                             item={item}
                             selected={id === selectedId}
-                            onSelect={() => setSelectedId(id)}
+                            onSelect={() => onSelectId(id)}
                           />
                         );
                       })}

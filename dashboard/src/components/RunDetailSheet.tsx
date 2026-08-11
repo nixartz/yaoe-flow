@@ -315,7 +315,19 @@ interface ResolvedSnapshot {
   mcpServers?: Array<{ name?: string; type?: string; uri?: string }>;
 }
 
-function SnapshotTab({ run }: { run: Run }) {
+function WorkspacePathRow({ workspacePath }: { workspacePath: string | null | undefined }) {
+  if (!workspacePath) return null;
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-muted-foreground">
+        Workspace no disco do daemon (só informativo — a dashboard pode estar em outra máquina)
+      </p>
+      <CopyableId value={workspacePath} kind="path" truncate />
+    </div>
+  );
+}
+
+function SnapshotTab({ run, workspacePath }: { run: Run; workspacePath: string | null | undefined }) {
   let snapshot: ResolvedSnapshot | null = null;
   try {
     snapshot = run.resolved_config_json ? (JSON.parse(run.resolved_config_json) as ResolvedSnapshot) : null;
@@ -329,10 +341,18 @@ function SnapshotTab({ run }: { run: Run }) {
     externalRefs = null;
   }
 
-  if (!snapshot) return <RecipeTab role={run.role} />;
+  if (!snapshot) {
+    return (
+      <div className="flex flex-col gap-4 text-sm">
+        <WorkspacePathRow workspacePath={workspacePath} />
+        <RecipeTab role={run.role} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 text-sm">
+      <WorkspacePathRow workspacePath={workspacePath} />
       <div>
         <p className="text-xs font-medium text-muted-foreground">Harness / Provider / Model (snapshot do dispatch)</p>
         <p>
@@ -727,7 +747,7 @@ export function RunDetailSheet({ runId, onOpenChange }: { runId: string | null; 
               </TabsContent>
               <TabsContent value="recipe" className="min-h-0 flex-1">
                 <ScrollArea className="h-full py-2">
-                  <SnapshotTab run={run} />
+                  <SnapshotTab run={run} workspacePath={data?.run.id === run.id ? data?.workspacePath : null} />
                 </ScrollArea>
               </TabsContent>
             </Tabs>

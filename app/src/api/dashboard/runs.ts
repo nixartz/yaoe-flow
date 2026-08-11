@@ -20,6 +20,7 @@ import {
   type LinearContext,
 } from "../../db/linearConnections";
 import { linearFor } from "../../linear";
+import { issueWorkspaceCwd } from "../../agent/workspace";
 
 export const runsRoutes = new Hono();
 
@@ -85,9 +86,16 @@ runsRoutes.get(
     },
   }),
   (c) => {
-    const run = store.getRun(c.req.param("id"));
-    if (!run) return c.json({ error: "not found" }, 404);
-    return c.json(run);
+    const found = store.getRun(c.req.param("id"));
+    if (!found) return c.json({ error: "not found" }, 404);
+    const row = found.run as { issue_id: string | null; linear_connection_id: string | null };
+    // Computed on read (not stored) — points at where the harness ran/would run for this
+    // issue; useful to locate leftover files after a run, purely informational (the dashboard
+    // may be viewed from a different machine than the daemon, so no "open" action here).
+    const workspacePath = row.issue_id
+      ? issueWorkspaceCwd(row.issue_id, row.linear_connection_id ?? DEFAULT_CONNECTION_ID)
+      : null;
+    return c.json({ ...found, workspacePath });
   }
 );
 

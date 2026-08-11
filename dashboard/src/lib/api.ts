@@ -214,7 +214,8 @@ function qs(params: object): string {
 export const runsApi = {
   list: (filters: RunFilters) => request<Paginated<Run>>(`/runs${qs(filters)}`),
   active: () => request<Run[]>("/runs/active"),
-  get: (id: string) => request<{ run: Run; events: RunEvent[] }>(`/runs/${id}`),
+  get: (id: string) =>
+    request<{ run: Run; events: RunEvent[]; workspacePath: string | null }>(`/runs/${id}`),
   // Só suportado no backend Goose — ver /api/runs/:id/stop no serviço.
   stop: (id: string, reason: string) =>
     request<{ ok: boolean; warning?: string }>(`/runs/${id}/stop`, { method: "POST", body: JSON.stringify({ reason }) }),
