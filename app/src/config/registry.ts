@@ -216,11 +216,11 @@ const serviceGroup: SettingMeta[] = [
     key: "TICK_INTERVAL_MS",
     group: "Service",
     type: "duration_ms",
-    default: 15000,
+    default: 30000,
     scope: "config",
     validate: (v) => (Number(v) >= 1000 ? null : "TICK_INTERVAL_MS must be ≥ 1000 (1s)"),
     description:
-      "Interval of the scheduler reconciliation loop (safety net for missed webhooks). Minimum 1s. Hot: the next tick scheduling already uses the new value.",
+      "Interval of the scheduler reconciliation loop (safety net for missed webhooks — most transitions are driven by webhooks, not by this poll). Minimum 1s, default raised from 15s to 30s to cut Linear API call volume; lower it if you rely on the tick itself (webhooks disabled/unreliable) and need faster reconciliation. Hot: the next tick scheduling already uses the new value.",
   },
   {
     key: "HTTP_TIMEOUT_MS",

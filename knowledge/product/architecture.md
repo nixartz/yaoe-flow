@@ -20,7 +20,7 @@ timestamp: "2026-08-02T00:00:00Z"
 
 ## The pipeline in one paragraph
 
-Linear is the source of truth: issue **statuses** drive the pipeline, humans curate with **labels** (`ready-to-refine`, `ready-to-implement`, `ready-to-merge`), and every agent action lands as a Linear comment. The `yaoe-flow` daemon (one process: API + scheduler + dashboard) receives Linear webhooks and, as a safety net, reconciles on a periodic tick (`TICK_INTERVAL_MS`, default 15s). For each dispatchable issue it picks the role's **active agent** (dashboard entity: SOUL + harness + model + MCPs), clones the target repo into an **issue-scoped workspace** (`$YAOE_HOME/worktrees/issue-<issueId>`), runs the harness, and records the full run (trace, usage, cost) for the dashboard.
+Linear is the source of truth: issue **statuses** drive the pipeline, humans curate with **labels** (`ready-to-refine`, `ready-to-implement`, `ready-to-merge`), and every agent action lands as a Linear comment. The `yaoe-flow` daemon (one process: API + scheduler + dashboard) receives Linear webhooks and, as a safety net, reconciles on a periodic tick (`TICK_INTERVAL_MS`, default 30s). For each dispatchable issue it picks the role's **active agent** (dashboard entity: SOUL + harness + model + MCPs), clones the target repo into an **issue-scoped workspace** (`$YAOE_HOME/worktrees/issue-<issueId>`), runs the harness, and records the full run (trace, usage, cost) for the dashboard.
 
 ## State machine (Linear statuses)
 

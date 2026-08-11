@@ -57,7 +57,7 @@ With `AUTO_DISPATCH_ISSUES=true` the first two gates are skipped (status is enou
 
 ## 4. Webhook (optional but recommended)
 
-Without a webhook the pipeline still works — the scheduler reconciles every `TICK_INTERVAL_MS` (15s default). A webhook adds instant push:
+Without a webhook the pipeline still works — the scheduler reconciles every `TICK_INTERVAL_MS` (30s default). A webhook adds instant push:
 
 - The wizard creates it for you when you provide a public URL (`https://your-host/webhook/linear`) and stores the generated secret (`LINEAR_WEBHOOK_SECRET`) used to validate delivery signatures.
 - Manual path: Linear → Settings → API → Webhooks → new webhook pointing at `https://your-host/webhook/linear`, then set the same secret in the config.

@@ -44,9 +44,9 @@ timestamp: "2026-08-07T00:00:00Z"
 
 ## Deferred
 
-- Broader reduction of Linear calls (single batched query for seat counts, longer `TICK_INTERVAL_MS` default).
-- Per-field Redis TTL (`HEXPIRE`) as a secondary safety net — rejected for now because Blocked locks must outlive any short TTL.
-- Dashboard control to manually release a lock.
+- ~~Broader reduction of Linear calls (single batched query for seat counts, longer `TICK_INTERVAL_MS` default).~~ — shipped: [knowledge/changes/2026-08-11/locks-dashboard-and-batching](../../2026-08-11/locks-dashboard-and-batching/README.md).
+- Per-field Redis TTL (`HEXPIRE`) as a secondary safety net — rejected for now because Blocked locks must outlive any short TTL. Re-confirmed as rejected in the bundle above; still not implemented.
+- ~~Dashboard control to manually release a lock.~~ — shipped: [knowledge/changes/2026-08-11/locks-dashboard-and-batching](../../2026-08-11/locks-dashboard-and-batching/README.md).
 
 ## Validation notes
 

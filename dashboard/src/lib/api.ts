@@ -786,3 +786,25 @@ export const readinessApi = {
       connectionId ? `/readiness?connectionId=${encodeURIComponent(connectionId)}` : "/readiness"
     ),
 };
+
+// ── Locks (footprint, Valkey) ──
+export interface LockEntry {
+  issueId: string;
+  footprint: string[];
+}
+export interface ConnectionLocks {
+  connectionId: string;
+  connectionName: string;
+  locks: LockEntry[];
+}
+export interface LocksListResponse {
+  connections: ConnectionLocks[];
+}
+export const locksApi = {
+  list: () => request<LocksListResponse>("/locks"),
+  release: (connectionId: string, issueId: string) =>
+    request<{ ok: true; warning?: string }>(
+      `/locks/${encodeURIComponent(connectionId)}/${encodeURIComponent(issueId)}/release`,
+      { method: "POST" }
+    ),
+};
