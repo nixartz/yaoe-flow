@@ -63,6 +63,31 @@ if [ "$arch" = "x64" ]; then
   esac
 fi
 
+# Bun-compiled Linux binaries link against glibc >= 2.17 (RHEL7/Ubuntu 14.04+
+# era) and are NOT musl-compatible — Alpine/Void and other musl distros need a
+# different build that isn't in the release matrix today. Advisory only (no
+# fallback asset exists, unlike AVX2): the point is to name the exact symptom
+# ("Illegal instruction"/dynamic-linker error, not a normal error message) so
+# a bug report is diagnosable instead of a mystery crash after install.
+if [ "$os" = linux ] && [ -z "${YAOE_SKIP_GLIBC_CHECK:-}" ]; then
+  glibc_ver=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}')
+  if [ -z "$glibc_ver" ]; then
+    glibc_ver=$(ldd --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+  fi
+  if [ -n "$glibc_ver" ]; then
+    glibc_major=${glibc_ver%%.*}
+    glibc_minor=${glibc_ver#*.}
+    glibc_minor=${glibc_minor%%.*}
+    if [ "$glibc_major" -lt 2 ] || { [ "$glibc_major" -eq 2 ] && [ "$glibc_minor" -lt 17 ]; }; then
+      echo "⚠️  glibc $glibc_ver detected (need >= 2.17) — this binary will likely fail to start with a" >&2
+      echo "   dynamic-linker error, not a normal error message. musl distros (Alpine, Void) are not" >&2
+      echo "   supported by this installer. Set YAOE_SKIP_GLIBC_CHECK=1 to silence this and proceed anyway." >&2
+    fi
+  else
+    echo "ℹ️  could not detect glibc version — proceeding (set YAOE_SKIP_GLIBC_CHECK=1 to silence this check)" >&2
+  fi
+fi
+
 api="https://api.github.com/repos/$REPO/releases"
 if [ -z "$TAG" ]; then
   # No -f: a 404 (repo without a release yet) falls through to the friendly

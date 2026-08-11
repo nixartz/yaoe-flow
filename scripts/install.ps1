@@ -50,6 +50,8 @@ if ($env:YAOE_FORCE_BASELINE -eq "1") {
   }
 }
 
+# No glibc check here (unlike install.sh) — glibc is a Linux libc concept and
+# does not apply to the Windows binary.
 if (-not $Tag) {
   $Tag = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest").tag_name
 }

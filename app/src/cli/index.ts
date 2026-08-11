@@ -42,8 +42,12 @@ Commands:
       calls (Valkey/Linear/GitHub).
   stop [--force]
       Stops the daemon (graceful by default; --force kills immediately).
-  update
-      Checks the latest release and prints the update path.
+  update [--force]
+      Downloads the latest release for this platform, verifies its checksum,
+      and atomically replaces the running binary. --force re-installs even if
+      already on the latest version (repairs a corrupted binary). Only works
+      from a compiled binary (install.sh/install.ps1/install-local) — refuses
+      under "bun run" dev mode.
   sync-souls [--role <role[,role]>] [--yes]
       Re-imports the SOULs bundled with this binary into the database, creating
       a new ACTIVE version for each role whose SOUL changed (the previous one
@@ -84,7 +88,7 @@ export async function runCli(argv: string[]): Promise<void> {
     case "stop":
       return (await import("./stop")).cmdStop(flags);
     case "update":
-      return (await import("./update")).cmdUpdate();
+      return (await import("./update")).cmdUpdate(flags);
     case "version":
       return (await import("./version")).cmdVersion();
     case "install-local":
