@@ -41,6 +41,10 @@ export interface ReleaseArgs {
   skipTests: boolean;
   /** Explicitly allow deleting and recreating an existing tag (local + remote when pushing). */
   replaceTag: boolean;
+  /** Poll `gh release view` after pushing until the workflow publishes the release (bounded, never hangs forever). */
+  wait: boolean;
+  /** Open a PR into main when the release was cut off-main (only reachable via --allow-branch). */
+  pr: boolean;
 }
 
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?$/;
@@ -115,6 +119,8 @@ export function parseArgs(argv: string[]): ReleaseArgs {
     allowEmpty: false,
     skipTests: false,
     replaceTag: false,
+    wait: true,
+    pr: true,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -130,6 +136,8 @@ export function parseArgs(argv: string[]): ReleaseArgs {
     else if (a === "--allow-empty") out.allowEmpty = true;
     else if (a === "--skip-tests") out.skipTests = true;
     else if (a === "--replace-tag") out.replaceTag = true;
+    else if (a === "--no-wait") out.wait = false;
+    else if (a === "--no-pr") out.pr = false;
     else if (a === "--patch") out.bump = "patch";
     else if (a === "--minor") out.bump = "minor";
     else if (a === "--major") out.bump = "major";
@@ -166,7 +174,14 @@ Flags:
   --allow-branch  allow running off main/master
   --allow-empty   allow releasing with an empty [Unreleased] section
   --skip-tests    do not run \`cd app && bun test\` before committing
+  --no-wait       do not poll \`gh release view\` for the workflow to publish (default: wait, bounded)
+  --no-pr         do not open a PR into main when the release was cut off-main (default: open one)
   --help          this message
+
+Post-push (requires the \`gh\` CLI; skipped with a note if it's not installed):
+  waits for the release workflow to publish vX.Y.Z via bounded \`gh release view\` polling
+  (never hangs forever — prints the Actions URL on timeout instead), and opens a PR into
+  main if the release was cut from another branch (--allow-branch).
 
 Republishing a broken tag:
   bun scripts/release.ts 0.1.4 --replace-tag
@@ -267,6 +282,80 @@ export async function resolveReplaceTag(opts: {
     `Tag ${opts.tag} already exists (${where}). Delete it and recreate? This can republish a broken release.`
   );
   return ok ? "replace" : "abort";
+}
+
+function ghAvailable(): boolean {
+  const r = spawnSync("gh", ["--version"], { encoding: "utf8" });
+  return r.status === 0;
+}
+
+/** `git@github.com:org/repo.git` / `https://github.com/org/repo.git` / `https://github.com/org/repo` → `org/repo`. */
+export function repoSlugFromRemote(remoteUrl: string): string | null {
+  const m = /github\.com[:/]([^/]+\/[^/.]+?)(?:\.git)?\/?$/.exec(remoteUrl.trim());
+  return m ? m[1]! : null;
+}
+
+export interface PollResult {
+  published: boolean;
+  url?: string;
+}
+
+/**
+ * Bounded poll of `gh release view <tag>` until the release workflow has
+ * published it (never hangs indefinitely — the workflow can take minutes,
+ * so a timeout is an expected outcome, not a failure). `viewFn`/`sleepMs`
+ * are injectable so this can be tested without a real `gh` call or a real
+ * wait (contract suite stays network-free).
+ */
+export async function pollReleasePublished(
+  tag: string,
+  opts: {
+    attempts?: number;
+    sleepMs?: (attempt: number) => number;
+    viewFn?: (tag: string) => { status: number; stdout: string };
+  } = {}
+): Promise<PollResult> {
+  const attempts = opts.attempts ?? 10;
+  const sleepMs = opts.sleepMs ?? ((attempt: number) => Math.min(2_000 * attempt, 20_000));
+  const viewFn =
+    opts.viewFn ??
+    ((t: string) => {
+      const r = spawnSync("gh", ["release", "view", t, "--json", "url"], { encoding: "utf8" });
+      return { status: r.status ?? 1, stdout: r.stdout ?? "" };
+    });
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const { status, stdout } = viewFn(tag);
+    if (status === 0) {
+      try {
+        const data = JSON.parse(stdout) as { url?: string };
+        if (data.url) return { published: true, url: data.url };
+      } catch {
+        // malformed output — treat as not-yet-ready, keep polling
+      }
+    }
+    if (attempt < attempts) await Bun.sleep(sleepMs(attempt));
+  }
+  return { published: false };
+}
+
+interface PrResult {
+  opened: boolean;
+  url?: string;
+  reason?: string;
+}
+
+/** Best-effort — a failure here (no auth, PR already exists, gh missing) never fails the release itself. */
+function tryOpenReleasePr(branch: string, tag: string): PrResult {
+  if (!ghAvailable()) return { opened: false, reason: "gh CLI not found" };
+  const body = `Release ${tag}, cut from branch \`${branch}\` (not main/master via --allow-branch). Merge to bring the version bump + CHANGELOG promotion back into main.`;
+  const r = spawnSync(
+    "gh",
+    ["pr", "create", "--base", "main", "--head", branch, "--title", `release: ${tag}`, "--body", body],
+    { encoding: "utf8" }
+  );
+  if (r.status === 0) return { opened: true, url: (r.stdout ?? "").trim() };
+  return { opened: false, reason: (r.stderr || r.stdout || "").trim() };
 }
 
 function readPkgVersion(path: string): string {
@@ -380,6 +469,7 @@ async function main(): Promise<void> {
   replace:    ${willReplaceTag ? `yes — delete existing tag (${[hasLocal && "local", hasRemote && "remote"].filter(Boolean).join(" + ")})` : "no"}
   push:       ${args.push ? "yes (branch + tag)" : "no (--no-push)"}
   tests:      ${args.skipTests ? "skip" : "cd app && bun test"}
+  post-push:  ${args.push ? `wait for publish: ${args.wait ? "yes" : "no (--no-wait)"}, open PR if off-main: ${args.pr ? "yes" : "no (--no-pr)"}` : "n/a (--no-push)"}
   dry-run:    ${args.dryRun ? "yes" : "no"}`);
 
   if (args.dryRun) {
@@ -444,6 +534,37 @@ async function main(): Promise<void> {
     console.log(`→ git push origin ${tag}`);
     run("git", ["push", "origin", tag], { inherit: true });
     console.log(`\n✓ pushed. GitHub Actions release workflow should start for ${tag}.`);
+
+    if (!ghAvailable()) {
+      console.log("  (gh CLI not found — skipping release-wait/PR steps; install https://cli.github.com to enable them)");
+    } else {
+      if (args.wait) {
+        console.log(`→ waiting for the release workflow to publish ${tag} (bounded \`gh release view\` polling)...`);
+        const result = await pollReleasePublished(tag);
+        if (result.published) {
+          console.log(`✓ release published: ${result.url}`);
+        } else {
+          const slug = repoSlugFromRemote(git("remote", "get-url", "origin"));
+          console.log(
+            "  release not confirmed published yet (workflow may still be running) — check manually" +
+              (slug ? `:\n  https://github.com/${slug}/actions` : ".")
+          );
+        }
+      }
+
+      if (args.pr && branch !== "main" && branch !== "master") {
+        console.log(`→ opening a PR to merge ${branch} into main (release cut off-main)...`);
+        const pr = tryOpenReleasePr(branch, tag);
+        if (pr.opened) {
+          console.log(`✓ PR opened: ${pr.url}`);
+        } else {
+          console.log(
+            `  could not open a PR automatically${pr.reason ? ` (${pr.reason})` : ""} — open one manually:\n` +
+              `  gh pr create --base main --head ${branch} --title "release: ${tag}"`
+          );
+        }
+      }
+    }
   } else {
     console.log(`\n✓ local only. Push when ready:\n  git push origin ${branch}\n  git push origin ${tag}`);
   }

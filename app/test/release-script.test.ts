@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   bumpVersion,
+  parseArgs,
   parseSemver,
+  pollReleasePublished,
   promoteChangelog,
+  repoSlugFromRemote,
   setPackageVersion,
   todayIsoDate,
   resolveReplaceTag,
@@ -118,5 +121,77 @@ describe("release script helpers", () => {
         ask: async () => false,
       })
     ).toBe("keep");
+  });
+
+  test("parseArgs: --no-wait / --no-pr flip the wait/pr defaults", () => {
+    expect(parseArgs([]).wait).toBe(true);
+    expect(parseArgs([]).pr).toBe(true);
+    expect(parseArgs(["--no-wait"]).wait).toBe(false);
+    expect(parseArgs(["--no-pr"]).pr).toBe(false);
+    expect(parseArgs(["--no-wait", "--no-pr"])).toMatchObject({ wait: false, pr: false });
+  });
+
+  test("repoSlugFromRemote handles ssh and https origin shapes", () => {
+    expect(repoSlugFromRemote("git@github.com:nixartz/yaoe-flow.git")).toBe("nixartz/yaoe-flow");
+    expect(repoSlugFromRemote("https://github.com/nixartz/yaoe-flow.git")).toBe("nixartz/yaoe-flow");
+    expect(repoSlugFromRemote("https://github.com/nixartz/yaoe-flow")).toBe("nixartz/yaoe-flow");
+    expect(repoSlugFromRemote("https://gitlab.com/nixartz/yaoe-flow.git")).toBeNull();
+  });
+
+  test("pollReleasePublished returns published:true as soon as viewFn reports a url, no extra polling", async () => {
+    let calls = 0;
+    const result = await pollReleasePublished("v0.1.4", {
+      attempts: 5,
+      sleepMs: () => 0,
+      viewFn: () => {
+        calls++;
+        return { status: 0, stdout: JSON.stringify({ url: "https://github.com/nixartz/yaoe-flow/releases/tag/v0.1.4" }) };
+      },
+    });
+    expect(result).toEqual({ published: true, url: "https://github.com/nixartz/yaoe-flow/releases/tag/v0.1.4" });
+    expect(calls).toBe(1);
+  });
+
+  test("pollReleasePublished retries on failure and eventually succeeds", async () => {
+    let calls = 0;
+    const result = await pollReleasePublished("v0.1.4", {
+      attempts: 5,
+      sleepMs: () => 0,
+      viewFn: () => {
+        calls++;
+        if (calls < 3) return { status: 1, stdout: "" };
+        return { status: 0, stdout: JSON.stringify({ url: "https://github.com/nixartz/yaoe-flow/releases/tag/v0.1.4" }) };
+      },
+    });
+    expect(result.published).toBe(true);
+    expect(calls).toBe(3);
+  });
+
+  test("pollReleasePublished gives up after the bounded attempt count (never hangs forever)", async () => {
+    let calls = 0;
+    const result = await pollReleasePublished("v0.1.4", {
+      attempts: 4,
+      sleepMs: () => 0,
+      viewFn: () => {
+        calls++;
+        return { status: 1, stdout: "" };
+      },
+    });
+    expect(result).toEqual({ published: false });
+    expect(calls).toBe(4);
+  });
+
+  test("pollReleasePublished treats malformed JSON as not-yet-ready and keeps polling", async () => {
+    let calls = 0;
+    const result = await pollReleasePublished("v0.1.4", {
+      attempts: 3,
+      sleepMs: () => 0,
+      viewFn: () => {
+        calls++;
+        return { status: 0, stdout: "not json" };
+      },
+    });
+    expect(result).toEqual({ published: false });
+    expect(calls).toBe(3);
   });
 });
