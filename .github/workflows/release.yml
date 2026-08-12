@@ -26,6 +26,18 @@ on:
         description: "git ref/sha to build (defaults to the tag push ref when omitted)"
         required: false
         type: string
+  # Manual escape hatch: republish an existing tag whose release publish step
+  # failed (or re-cut a build) without needing a brand-new tag push.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "X.Y.Z (no leading v) of the existing tag to (re)publish"
+        required: true
+        type: string
+      ref:
+        description: "git ref/sha to build (defaults to refs/tags/v<version>)"
+        required: false
+        type: string
 
 permissions:
   contents: write # create the release
@@ -41,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || (inputs.version && format('refs/tags/v{0}', inputs.version)) || github.ref }}
 
       - name: Version
         id: version
@@ -221,7 +233,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || (inputs.version && format('refs/tags/v{0}', inputs.version)) || github.ref }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -245,6 +257,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.build.outputs.version }}
           body_path: release-body.md
           files: |
             dist/yaoe-flow-*

@@ -6,6 +6,10 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+### Fixed
+
+- **`auto-release`'s final publish step failed every time it actually ran**: `softprops/action-gh-release@v2` infers the release tag from `GITHUB_REF` by default, but inside a `workflow_call` invocation `github.ref` is the *caller's* ref (`refs/heads/main`, since the trigger was a push to `main`) — never the tag, even though `actions/checkout` was separately given the correct tag ref. Every auto-cut release hit `⚠️ GitHub Releases requires a tag` on publish. Fixed by passing `tag_name` explicitly. Also added a `workflow_dispatch` trigger to both `auto-release.yml` (on-demand cut, with a `bump` override since there's no merge commit to read PR labels from) and `release.yml` (republish an existing tag whose publish step failed, without a new tag push). OKF: [knowledge/changes/2026-08-11/auto-release-on-merge](knowledge/changes/2026-08-11/auto-release-on-merge/README.md).
+
 ## [0.1.7] - 2026-08-12
 
 ### Added
