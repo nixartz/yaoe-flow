@@ -4,9 +4,28 @@ name: release
 # verify each binary EXECUTES on its real platform, then publish a GitHub
 # Release whose body comes from the matching CHANGELOG.md section
 # (https://keepachangelog.com) plus auto-generated notes.
+#
+# Two ways in:
+#   - push a `vX.Y.Z` tag directly (manual `bun scripts/release.ts` flow).
+#   - called as a reusable workflow by auto-release.yml after it cuts a
+#     release automatically on a merge to main. workflow_call is used
+#     instead of relying on that workflow's own tag push to retrigger this
+#     one via `on: push: tags` — a push made with the default GITHUB_TOKEN
+#     does not fire other workflows, by GitHub's design (loop prevention),
+#     so the tag-push trigger alone would silently never run in that path.
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      version:
+        description: "X.Y.Z (no leading v) — overrides deriving it from the tag"
+        required: true
+        type: string
+      ref:
+        description: "git ref/sha to build (defaults to the tag push ref when omitted)"
+        required: false
+        type: string
 
 permissions:
   contents: write # create the release
@@ -21,10 +40,19 @@ jobs:
       version: ${{ steps.version.outputs.value }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
-      - name: Version from tag
+      - name: Version
         id: version
-        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        env:
+          CALLER_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$CALLER_VERSION" ]; then
+            echo "value=$CALLER_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -192,6 +220,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/download-artifact@v4
         with:
