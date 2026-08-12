@@ -20,9 +20,23 @@ name: auto-release
 # a reusable workflow (workflow_call) rather than relying on this job's own
 # tag push to retrigger release.yml's `on: push: tags` — see the comment at
 # the top of release.yml for why that path doesn't fire on its own.
+#
+# Also runnable on demand (workflow_dispatch) — e.g. to land a fix to this
+# workflow itself without waiting for the next PR merge, or to re-run after
+# a failed cut. Manual runs still respect the empty-[Unreleased] gate; the
+# `bump` input lets you skip the PR-label lookup (there is no merge commit
+# to read labels from) and pick the kind directly.
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump kind (auto = read the merged PR's release:major/release:minor label, default patch)"
+        required: false
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
 
 concurrency:
   group: auto-release
@@ -34,7 +48,7 @@ permissions:
 
 jobs:
   cut:
-    if: "${{ !startsWith(github.event.head_commit.message, 'release: v') }}"
+    if: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'release: v') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -78,7 +92,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          MANUAL_BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'auto' }}
         run: |
+          if [ -n "$MANUAL_BUMP" ] && [ "$MANUAL_BUMP" != "auto" ]; then
+            kind="$MANUAL_BUMP"
+            echo "kind=$kind" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           kind="patch"
           pr_number=$(printf '%s' "$HEAD_COMMIT_MESSAGE" | grep -oE '#[0-9]+' | head -1 | tr -d '#' || true)
           if [ -n "$pr_number" ]; then
