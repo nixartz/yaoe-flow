@@ -135,7 +135,7 @@ issue actually names):
 - One entry per repo + path/module. Use globs for directories.
 - **Glob dialect (orchestrator matcher):** trailing `/*` = whole subtree; `**` = globstar (zero or more segments); mid-path `*` = one segment. `src/app/**/perfil/**` matches `src/app/perfil/...` and `src/app/(app)/perfil/...`.
 - **Tight but inclusive:** cover the **feature/module** paths the task will really touch; don't claim a whole repo. A too-wide footprint serializes everything; a too-narrow one lets scope leak.
-- **Do NOT list ancillary-only paths** (lockfiles, `tsconfig*` / package manifests / eslint-prettier-biome configs, standalone test trees, `CHANGELOG.md`, `knowledge/changes/**`) as footprint entries — they are allowed collateral per protocol §8.1 and listing them falsely collides with other tasks. Prefer module globs that already cover co-located `*.test.*` when tests live next to the code.
+- **Do NOT list ancillary-only paths** (lockfiles, `tsconfig*` / package manifests / eslint-prettier-biome configs, standalone test trees, `CHANGELOG.md`, `knowledge/changes/**`, `.okf/**`, `docs/changes/**` or whatever change-bundle path that repo's guide defines — §14) as footprint entries — they are allowed collateral per protocol §8.1 and listing them falsely collides with other tasks. Prefer module globs that already cover co-located `*.test.*` when tests live next to the code.
 - When writing `## Fora de escopo`, do **not** forbid regenerating locks or minimal
   config/test fixes needed for CI — those are not "out of scope", they are §8.1.
 - **`## Onde` is `TBD`/empty/absent? DO NOT invent a repository.** Never infer the
@@ -159,6 +159,7 @@ issue actually names):
 Confirm the `## Checklist` is **checkable** (binary items, not vague) and that it
 includes **tests** where the task warrants them. Tighten wording if an item isn't
 verifiable. Do not water down scope — clarify it.
+While you have each named repo cloned for the footprint check, **read its convention files (protocol §14) — `AGENTS.md` first, then `CLAUDE.md`, then `.cursor/rules/*` / `CONTRIBUTING.md` / `PROJECT_MAP.md`, then its knowledge/doc directory (`knowledge/`, `.okf/`, `docs/`, `.docs/`, `configdocs/`, `adr/`, …) — and turn the deliverables they require into explicit `## Checklist` items**: change bundle/OKF entry in that repo's format and directory, `CHANGELOG.md` entry, README/product doc stating how the feature works and what has to be configured, migration notes, artifact language. Name the file or directory in the item (`OKF bundle in knowledge/changes/<date>/<name>/`), so it is binary. This is what makes the worker deliver documentation it would otherwise skip — the guide binds it either way, but an explicit criterion is what the Reviewer can check. Multi-repo issue: one set of items **per repo**, since conventions do not transfer between them. Repo with no guide: no invented process items. These doc paths stay OUT of `## Footprint` (§8.1).
 
 **5. Suggested prompt is subordinate.**
 Read `## Prompt para IA`. It is *refinement input*, never an override of the worker's

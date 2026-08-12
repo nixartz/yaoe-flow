@@ -30,8 +30,11 @@ import { resolveGithubAuth } from "../githubAuth";
 import { ensureHarnessBinOnPath } from "../cli/setup/harnessDeps";
 
 // Registro em memória dos runs em voo (qualquer harness) — permite à
-// dashboard encerrar manualmente (cancelRun). Só funciona com uma instância
-// do serviço (mesma limitação documentada pro guard `running` do scheduler).
+// dashboard encerrar manualmente (cancelRun/kill do processo). Isso continua
+// single-instance por natureza (não dá pra mandar SIGKILL num processo de
+// outro daemon sem IPC) — mas a EXCLUSIVIDADE de dispatch em si (não rodar a
+// mesma issue+papel duas vezes) já não depende deste mapa: é garantida
+// cross-process pelo lease em Valkey (locks.tryAcquireDispatchLock).
 const activeRuns = new Map<string, { kill(): void; cwd: string; issueId?: string }>();
 
 export function cancelActiveRun(runId: string): boolean {
@@ -181,6 +184,21 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
   const provider = adapter.capabilities.integration === "acp" ? String(resolution.settings.provider ?? "openrouter") : undefined;
   const connectionId = opts.linearCtx?.connectionId ?? DEFAULT_CONNECTION_ID;
 
+  // Cross-process guard, on top of (not instead of) the footprint lock: at
+  // most one in-flight dispatch per (connection, issue, role) even across
+  // daemon instances sharing the same Valkey — `activeRuns` below only
+  // guards within this process. Acquired before any DB row / network call so
+  // a denial here never leaves a `running` row or a spawned process behind.
+  let dispatchLockToken: string | null = null;
+  if (opts.issueId) {
+    dispatchLockToken = await locks.tryAcquireDispatchLock(connectionId, opts.issueId, opts.role);
+    if (!dispatchLockToken) {
+      throw new HarnessNotReadyError(
+        `dispatch já em andamento para a issue ${opts.issueId} (papel "${opts.role}") em outro processo — tenta de novo no próximo tick`
+      );
+    }
+  }
+
   // ANTES do startRun: no modo GitHub App isto vai à rede e pode falhar
   // (credencial incompleta, PEM inválida, installation revogada). Falhar aqui
   // rejeita a promise sem deixar linha de run pendurada em `running` — o
@@ -302,6 +320,9 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
     throw e;
   } finally {
     activeRuns.delete(runId);
+    if (opts.issueId && dispatchLockToken) {
+      await locks.releaseDispatchLock(connectionId, opts.issueId, opts.role, dispatchLockToken).catch(() => {});
+    }
   }
 }
 

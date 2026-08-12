@@ -8,9 +8,11 @@ import {
   createVersionBody,
   updateHarnessConfigBody,
   activateHarnessBody,
+  soulSyncBody,
 } from "./agents.schema";
 import * as agentsRepo from "../../db/agents";
 import { AgentError } from "../../db/agents";
+import { applySoulSync, parseRoleFilter, planSoulSync } from "../../agent/soulSync";
 import { AGENT_ROLES, ROLE_METAS } from "../../agent/recipe/defaults";
 import { listHarnessIds } from "../../agent/harness/registry";
 import { authUser } from "../../dashboard/auth";
@@ -31,6 +33,49 @@ agentsRoutes.get(
     responses: { 200: jsonContent(looseObject, "Agentes") },
   }),
   (c) => c.json({ agents: agentsRepo.listAgents(), roles: AGENT_ROLES })
+);
+
+// NOTE: declared BEFORE "/:id" — Hono matches in order and `soul-sync` would
+// otherwise be read as an agent id.
+agentsRoutes.get(
+  "/soul-sync",
+  describeRoute({
+    tags: ["Agents"],
+    summary: "Plan a SOUL sync: bundled seed vs. the active version of each role",
+    responses: { 200: jsonContent(looseObject, "Plan (read-only)") },
+  }),
+  (c) => c.json({ plan: planSoulSync() })
+);
+
+agentsRoutes.post(
+  "/soul-sync",
+  describeRoute({
+    tags: ["Agents"],
+    summary: "Apply the bundled SOULs (new active version per outdated role; history preserved)",
+    responses: {
+      200: jsonContent(looseObject, "Applied"),
+      400: jsonContent(errorBody, "Error"),
+    },
+  }),
+  validator("json", soulSyncBody),
+  async (c) => {
+    const body = c.req.valid("json");
+    try {
+      const roles = body.roles?.length ? parseRoleFilter(body.roles.join(",")) : undefined;
+      const applied = applySoulSync({ roles, createdBy: authUser(c).id, source: "dashboard" });
+      log.dashboard.info(
+        { roles: applied.map((a) => a.role), by: authUser(c).username },
+        "bundled SOULs applied via dashboard"
+      );
+      return c.json({ ok: true as const, applied, plan: planSoulSync() });
+    } catch (e) {
+      if (e instanceof AgentError) {
+        const { body: b, status } = handleAgentError(e);
+        return c.json(b, status as 400);
+      }
+      return c.json({ error: (e as Error).message }, 400);
+    }
+  }
 );
 
 agentsRoutes.get(

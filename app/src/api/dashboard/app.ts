@@ -19,6 +19,7 @@ import { harnessRoutes } from "./harness";
 import { notificationsRoutes } from "./notifications";
 import { linearConnectionsRoutes } from "./linear-connections";
 import { readinessRoutes } from "./readiness";
+import { locksRoutes } from "./locks";
 
 const healthOk = z.object({ ok: z.literal(true) });
 
@@ -59,6 +60,7 @@ export function createDashboardApp(): Hono {
   app.route("/api/notifications", notificationsRoutes);
   app.route("/api/linear-connections", linearConnectionsRoutes);
   app.route("/api", readinessRoutes);
+  app.route("/api", locksRoutes);
 
   return app;
 }

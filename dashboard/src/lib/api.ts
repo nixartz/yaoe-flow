@@ -214,7 +214,8 @@ function qs(params: object): string {
 export const runsApi = {
   list: (filters: RunFilters) => request<Paginated<Run>>(`/runs${qs(filters)}`),
   active: () => request<Run[]>("/runs/active"),
-  get: (id: string) => request<{ run: Run; events: RunEvent[] }>(`/runs/${id}`),
+  get: (id: string) =>
+    request<{ run: Run; events: RunEvent[]; workspacePath: string | null }>(`/runs/${id}`),
   // Só suportado no backend Goose — ver /api/runs/:id/stop no serviço.
   stop: (id: string, reason: string) =>
     request<{ ok: boolean; warning?: string }>(`/runs/${id}/stop`, { method: "POST", body: JSON.stringify({ reason }) }),
@@ -402,6 +403,31 @@ export interface AgentDetail {
   roleMeta: { title: string; description: string; prompt: string };
 }
 
+/** Mirrors `app/src/agent/soulSync.ts` (SOUL bundled with the binary × active version). */
+export type SoulSyncStatus = "up-to-date" | "outdated" | "no-agent" | "no-seed";
+export interface SoulSyncEntry {
+  role: AgentRole;
+  soulFile: string;
+  status: SoulSyncStatus;
+  agentId: string | null;
+  agentName: string | null;
+  currentVersion: number | null;
+  currentVersionComment: string | null;
+  currentHash: string | null;
+  currentLines: number | null;
+  nextVersion: number | null;
+  seedHash: string | null;
+  seedLines: number | null;
+}
+export interface SoulSyncApplied {
+  role: AgentRole;
+  agentId: string;
+  agentName: string;
+  previousVersion: number | null;
+  newVersion: number;
+  versionId: string;
+}
+
 export const agentsApi = {
   list: () => request<{ agents: Agent[]; roles: AgentRole[] }>("/agents"),
   get: (id: string) => request<AgentDetail>(`/agents/${id}`),
@@ -422,6 +448,12 @@ export const agentsApi = {
     request<{ ok: boolean }>(`/agents/${id}/harness/${harnessId}`, { method: "DELETE" }),
   activateHarness: (id: string, harnessId: string) =>
     request<{ ok: boolean; agent: Agent }>(`/agents/${id}/activate-harness`, { method: "POST", body: JSON.stringify({ harnessId }) }),
+  soulSyncPlan: () => request<{ plan: SoulSyncEntry[] }>("/agents/soul-sync"),
+  soulSyncApply: (roles?: AgentRole[]) =>
+    request<{ ok: boolean; applied: SoulSyncApplied[]; plan: SoulSyncEntry[] }>("/agents/soul-sync", {
+      method: "POST",
+      body: JSON.stringify({ roles: roles ?? [] }),
+    }),
 };
 
 // ── Harness (Fase 2 — §7.4) ──
@@ -753,5 +785,27 @@ export const readinessApi = {
   get: (connectionId?: string) =>
     request<ReadinessResponse>(
       connectionId ? `/readiness?connectionId=${encodeURIComponent(connectionId)}` : "/readiness"
+    ),
+};
+
+// ── Locks (footprint, Valkey) ──
+export interface LockEntry {
+  issueId: string;
+  footprint: string[];
+}
+export interface ConnectionLocks {
+  connectionId: string;
+  connectionName: string;
+  locks: LockEntry[];
+}
+export interface LocksListResponse {
+  connections: ConnectionLocks[];
+}
+export const locksApi = {
+  list: () => request<LocksListResponse>("/locks"),
+  release: (connectionId: string, issueId: string) =>
+    request<{ ok: true; warning?: string }>(
+      `/locks/${encodeURIComponent(connectionId)}/${encodeURIComponent(issueId)}/release`,
+      { method: "POST" }
     ),
 };

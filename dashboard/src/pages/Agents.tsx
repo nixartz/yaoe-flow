@@ -14,6 +14,7 @@ import { PageError, PageSkeleton, EmptyState } from "@/components/PageStates";
 import { PageHeader } from "@/components/PageHeader";
 import { RoleBadge } from "@/components/RoleBadge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { SoulSyncButton } from "@/components/SoulSyncButton";
 import { agentsApi, ApiError, type Agent, type AgentRole } from "@/lib/api";
 import { HARNESS_OPTIONS, harnessLabel, roleLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -373,10 +374,13 @@ export function Agents() {
         title="Agents"
         description="Um agente ativo por papel (PMO, Dev, Reviewer, Orchestrator). Crie configurações alternativas, ative a desejada e edite instruções, ferramenta e integrações."
         actions={
-          <Button size="sm" className="gap-1" onClick={() => setCreating(true)}>
-            <IconPlus className="size-3.5" aria-hidden />
-            Nova configuração
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <SoulSyncButton />
+            <Button size="sm" className="gap-1" onClick={() => setCreating(true)}>
+              <IconPlus className="size-3.5" aria-hidden />
+              Nova configuração
+            </Button>
+          </div>
         }
       />
 

@@ -1,6 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { filesOutsideFootprint, isAncillaryScopePath } from "../src/scope";
 import { footprintsCollide } from "../src/dag";
+import { settingMeta } from "../src/config/registry";
+import { invalidateSettingsCache } from "../src/config/service";
 
 describe("isAncillaryScopePath", () => {
   test("lockfiles and manifests", () => {
@@ -30,6 +32,63 @@ describe("isAncillaryScopePath", () => {
       true
     );
     expect(isAncillaryScopePath("knowledge/product/architecture.md")).toBe(false);
+  });
+
+  test("default doc paths cover the other common change-bundle layouts", () => {
+    expect(isAncillaryScopePath(".okf/2026-08-11/x.md")).toBe(true);
+    expect(isAncillaryScopePath("docs/changes/2026-08-11/x.md")).toBe(true);
+    expect(isAncillaryScopePath("docs/adr/0001-pick-sqlite.md")).toBe(true);
+    expect(isAncillaryScopePath(".changeset/lovely-pandas-jam.md")).toBe(true);
+    // Product docs are NOT process docs — they stay real scope.
+    expect(isAncillaryScopePath("docs/harnesses.md")).toBe(false);
+  });
+
+  test("doc patterns also match at any depth (monorepo packages)", () => {
+    expect(isAncillaryScopePath("apps/web/CHANGELOG.md")).toBe(true);
+    expect(isAncillaryScopePath("packages/api/knowledge/changes/2026-08-11/x.md")).toBe(true);
+  });
+});
+
+describe("SCOPE_ANCILLARY_DOC_PATHS", () => {
+  afterEach(() => {
+    delete process.env.SCOPE_ANCILLARY_DOC_PATHS;
+    invalidateSettingsCache();
+  });
+
+  test("a repo with its own layout marks ITS docs ancillary — and only those", () => {
+    process.env.SCOPE_ANCILLARY_DOC_PATHS = "configdocs/**,RELEASES.md";
+    invalidateSettingsCache();
+
+    expect(isAncillaryScopePath("configdocs/changes/feature-x.md")).toBe(true);
+    expect(isAncillaryScopePath("RELEASES.md")).toBe(true);
+    // Replaced, not merged: the default layout is no longer ancillary here.
+    expect(isAncillaryScopePath("knowledge/changes/2026-08-11/x.md")).toBe(false);
+    expect(isAncillaryScopePath("src/auth/login.ts")).toBe(false);
+  });
+
+  test("the scope-check stops rejecting the change bundle the repo guide requires", () => {
+    process.env.SCOPE_ANCILLARY_DOC_PATHS = "docs/changes/**";
+    invalidateSettingsCache();
+
+    expect(
+      filesOutsideFootprint(
+        ["src/auth/login.ts", "docs/changes/2026-08-11/auth/README.md"],
+        ["my-api:src/auth/*"],
+        "my-api"
+      )
+    ).toEqual([]);
+  });
+
+  test("explicit override wins over the configured value", () => {
+    expect(isAncillaryScopePath("CHANGELOG.md", ["docs/changes/**"])).toBe(false);
+    expect(isAncillaryScopePath("docs/changes/x.md", ["docs/changes/**"])).toBe(true);
+  });
+
+  test("validation rejects globs that would disable the scope-check", () => {
+    const validate = settingMeta("SCOPE_ANCILLARY_DOC_PATHS")?.validate;
+    expect(validate?.("docs/changes/**,CHANGELOG.md")).toBeNull();
+    expect(validate?.("docs/changes/**,*")).toContain("disable the scope-check");
+    expect(validate?.("../outside/**")).toContain("repo-relative");
   });
 });
 

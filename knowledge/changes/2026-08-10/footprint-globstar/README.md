@@ -38,5 +38,5 @@ The PMO footprint used `src/app/**/perfil/**`-style globs, but `app/src/dag.ts` 
 
 ## Deferred
 
-- Syncing active DB SOUL versions on deployed instances (seeds in `agents/*.SOUL.md` updated; operators who customized DB copies should re-import or patch).
-- Smarter disjointness for two patterns that share a literal prefix but cannot match the same file (current fallback may over-collide).
+- ~~Syncing active DB SOUL versions on deployed instances~~ — shipped: [knowledge/changes/2026-08-11/soul-sync](../../2026-08-11/soul-sync/README.md) (`yaoe-flow sync-souls` + dashboard button).
+- ~~Smarter disjointness for two patterns that share a literal prefix but cannot match the same file~~ — shipped: [knowledge/changes/2026-08-11/footprint-globstar-disjointness](../../2026-08-11/footprint-globstar-disjointness/README.md).

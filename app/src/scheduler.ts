@@ -375,6 +375,7 @@ export async function tick(): Promise<void> {
       try {
         const lin = linearFor(ctx);
         lin.beginTickCache();
+        await prefetchTickStates(lin);
         // Self-heal missed Completed webhooks BEFORE fillWorkers, otherwise
         // Planned candidates stay blocked by zombie locks forever.
         await reconcileStaleLocks(ctx);
@@ -429,6 +430,26 @@ export async function tick(): Promise<void> {
     throw e;
   } finally {
     running = false;
+  }
+}
+
+// One GraphQL round-trip instead of up to 8: fillRefiners/fillWorkers/
+// fillReviewers/reclaimStale/pendingMergeIssues each read one of these plain
+// (non-label-gated) by-state lists every tick. Warming them together via
+// listIssuesInStates lets every later listIssuesInState/countInState call
+// for the same state hit tickListCache instead of issuing its own request.
+// The ready-to-* label-gated variant (listIssuesInStateWithLabel) is a
+// different cache key/query and isn't covered here — only relevant when the
+// human curation gate (autoDispatchIssues=false) is active for that queue.
+async function prefetchTickStates(lin: LinearClient): Promise<void> {
+  const states = [S.refining, S.inProgress, S.reopened, S.inReview, S.codeReview, S.pendingMerge];
+  if (config.autoDispatchIssues) states.push(S.todo, S.planned);
+  try {
+    await lin.listIssuesInStates(states);
+  } catch (e) {
+    // Best-effort warm-up only — a failure here just means each caller falls
+    // back to its own individual listIssuesInState/countInState call below.
+    log.scheduler.debug({ ...errFields(e) }, "prefetchTickStates failed (non-fatal, falling back to per-call fetch)");
   }
 }
 

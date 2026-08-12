@@ -4,7 +4,17 @@
 // `bun src/index.ts`, which never passes argv).
 import { parseArgs } from "./args";
 
-const COMMANDS = ["setup", "daemon", "status", "doctor", "stop", "update", "version", "install-local"] as const;
+const COMMANDS = [
+  "setup",
+  "daemon",
+  "status",
+  "doctor",
+  "stop",
+  "update",
+  "version",
+  "install-local",
+  "sync-souls",
+] as const;
 type Command = (typeof COMMANDS)[number];
 
 function isKnownCommand(c: string | undefined): c is Command {
@@ -32,8 +42,17 @@ Commands:
       calls (Valkey/Linear/GitHub).
   stop [--force]
       Stops the daemon (graceful by default; --force kills immediately).
-  update
-      Checks the latest release and prints the update path.
+  update [--force]
+      Downloads the latest release for this platform, verifies its checksum,
+      and atomically replaces the running binary. --force re-installs even if
+      already on the latest version (repairs a corrupted binary). Only works
+      from a compiled binary (install.sh/install.ps1/install-local) — refuses
+      under "bun run" dev mode.
+  sync-souls [--role <role[,role]>] [--yes]
+      Re-imports the SOULs bundled with this binary into the database, creating
+      a new ACTIVE version for each role whose SOUL changed (the previous one
+      stays in the agent's history). Shows the plan and asks before writing —
+      run it after an upgrade that changes agent behavior.
   install-local [--skip-dashboard] [--dir <path>] [--yes]
       Compiles the binary for this machine from source and installs it into
       ~/.local/bin (only works inside a clone of the repo).
@@ -69,10 +88,12 @@ export async function runCli(argv: string[]): Promise<void> {
     case "stop":
       return (await import("./stop")).cmdStop(flags);
     case "update":
-      return (await import("./update")).cmdUpdate();
+      return (await import("./update")).cmdUpdate(flags);
     case "version":
       return (await import("./version")).cmdVersion();
     case "install-local":
       return (await import("./install-local")).cmdInstallLocal(flags);
+    case "sync-souls":
+      return (await import("./sync-souls")).cmdSyncSouls(flags);
   }
 }

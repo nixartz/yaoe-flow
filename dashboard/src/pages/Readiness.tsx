@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconRefresh,
   IconLoader2,
@@ -12,6 +12,7 @@ import {
   IconBinaryTree,
   IconLabel,
   IconLock,
+  IconLockOpen,
   IconGitPullRequest,
   IconChevronDown,
   IconChevronRight,
@@ -21,6 +22,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageError, PageSkeleton, EmptyState } from "@/components/PageStates";
 import { IssueIdentity } from "@/components/LinearIssueLink";
 import { CopyableId } from "@/components/CopyableId";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MarkdownMessage } from "@/components/MarkdownMessage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   linearConnectionsApi,
+  locksApi,
   readinessApi,
   type ReadinessIssue,
   type ReadinessPhase,
@@ -304,6 +307,87 @@ function IssueRow({
   );
 }
 
+// Manual escape hatch — for the rare case a webhook is lost AND the next
+// tick's reconcileStaleLocks() hasn't self-healed yet. Best-effort: doesn't
+// touch Linear, so releasing a still-legitimate lock just means the next
+// tick's own consistency checks decide what happens next.
+function LocksPanel({ connectionId }: { connectionId: string }) {
+  const qc = useQueryClient();
+  const locksQ = useQuery({
+    queryKey: ["locks"],
+    queryFn: locksApi.list,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  });
+  const [target, setTarget] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+
+  const releaseMutation = useMutation({
+    mutationFn: (issueId: string) => locksApi.release(connectionId, issueId),
+    onSuccess: (data) => {
+      setTarget(null);
+      setWarning(data.warning ?? null);
+      qc.invalidateQueries({ queryKey: ["locks"] });
+      qc.invalidateQueries({ queryKey: ["readiness"] });
+    },
+  });
+
+  const locks = locksQ.data?.connections.find((c) => c.connectionId === connectionId)?.locks ?? [];
+
+  if (locksQ.isLoading || locks.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle className="flex items-center gap-1.5 text-base">
+            <IconLock className="size-4" aria-hidden />
+            Locks ativos
+          </CardTitle>
+          <Badge variant="secondary" className="tabular-nums">
+            {locks.length}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2 p-0">
+        {warning && (
+          <p className="px-3 pt-1 text-xs text-warning">{warning}</p>
+        )}
+        <ul className="divide-y">
+          {locks.map((l) => (
+            <li key={l.issueId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+              <div className="min-w-0 flex-1 space-y-1">
+                <CopyableId value={l.issueId} kind="issue-uuid" />
+                {l.footprint.length > 0 && (
+                  <ul className="space-y-0.5 font-mono text-[11px] text-muted-foreground">
+                    {l.footprint.map((p, i) => (
+                      <li key={i}>{p}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setTarget(l.issueId)}>
+                <IconLockOpen className="size-3.5" aria-hidden />
+                Liberar
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+      <ConfirmDialog
+        open={Boolean(target)}
+        onOpenChange={(o) => !o && setTarget(null)}
+        title="Liberar lock manualmente?"
+        description="A issue perde a exclusividade de footprint imediatamente. Não altera o Linear — se o lock ainda for legítimo, o próximo tick pode recriá-lo. Use apenas quando um webhook perdido deixou o lock preso."
+        confirmLabel="Liberar lock"
+        variant="destructive"
+        pending={releaseMutation.isPending}
+        onConfirm={() => target && releaseMutation.mutate(target)}
+      />
+    </Card>
+  );
+}
+
 function PhaseSection({
   phase,
   issues,
@@ -507,6 +591,11 @@ export function Readiness() {
           }
         />
       )}
+
+      {/* Independent of the readiness snapshot (Valkey-only read) — locks
+          still matter (and still need a manual escape hatch) even when the
+          tick hasn't produced a snapshot yet, e.g. ORCHESTRATOR_ENABLED=false. */}
+      {connectionId && <LocksPanel connectionId={connectionId} />}
 
       {snap && (
         <>

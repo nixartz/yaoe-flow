@@ -109,6 +109,7 @@ x64 binaries auto-detect AVX2 support (2013+ CPUs) and fall back to a `-baseline
 | `yaoe-flow doctor [--offline]` | Deep diagnosis with per-item fixes |
 | `yaoe-flow stop [--force]` | Graceful stop (or immediate kill) |
 | `yaoe-flow update` | Check the latest release |
+| `yaoe-flow sync-souls [--role r] [--yes]` | Re-import the SOULs bundled with the binary into the database (shows the plan, asks first) |
 | `yaoe-flow install-local` | Compile + install from a source clone |
 | `yaoe-flow version` | Version + commit + platform |
 

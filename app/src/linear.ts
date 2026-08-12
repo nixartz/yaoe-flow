@@ -469,6 +469,73 @@ export function createLinearClient(scope: LinearScope) {
     return (await listIssuesInState(stateName)).length;
   }
 
+  // One GraphQL round-trip for several plain by-state lists (fillWorkers,
+  // fillReviewers, reclaim, pendingMergeIssues, ... often need 5-8 distinct
+  // states in the same tick). Aliased sub-queries share the tickListCache
+  // key ("state:<name>") with listIssuesInState, so a state already fetched
+  // this tick (or fetched here and read again later via listIssuesInState)
+  // never triggers a second request.
+  async function listIssuesInStates(stateNames: string[]): Promise<Record<string, LinearIssue[]>> {
+    const uniqueNames = [...new Set(stateNames)];
+    const toFetch = uniqueNames.filter((name) => !tickListCache.has(`state:${name}`));
+
+    if (toFetch.length > 0) {
+      const aliasFor = (i: number) => `s${i}`;
+      const aliasToName = new Map(toFetch.map((name, i) => [aliasFor(i), name]));
+      const queryParts = toFetch
+        .map(
+          (_, i) => `${aliasFor(i)}: issues(first: 50, filter: $filter${i}) {
+            nodes { id identifier title state { name } team { id } }
+          }`
+        )
+        .join("\n");
+      const varDecls = toFetch.map((_, i) => `$filter${i}: IssueFilter!`).join(", ");
+      const variables = Object.fromEntries(
+        toFetch.map((name, i) => [`filter${i}`, withTeamFilter({ state: { name: { eq: name } } })])
+      );
+
+      const pending = (async () => {
+        const data = await gql<
+          Record<string, { nodes: { id: string; identifier: string; title: string; state: { name: string }; team?: { id: string } }[] }>
+        >(
+          "issues.listByStates",
+          `query(${varDecls}) {\n${queryParts}\n}`,
+          variables,
+          { stateNames: toFetch }
+        );
+        const byAlias: Record<string, LinearIssue[]> = {};
+        for (const [alias, name] of aliasToName) {
+          byAlias[name] = (data[alias]?.nodes ?? []).map((n) => ({
+            ...n,
+            stateName: n.state.name,
+            teamId: n.team?.id,
+            blockedBy: [],
+          }));
+        }
+        return byAlias;
+      })();
+
+      // Fan the shared batch promise back out per-state so listIssuesInState
+      // (and a second listIssuesInStates call) hit the same cache entry.
+      for (const name of toFetch) {
+        const cacheKey = `state:${name}`;
+        const perState = pending.then((byAlias) => byAlias[name] ?? []);
+        tickListCache.set(cacheKey, perState);
+        perState.catch(() => {
+          if (tickListCache.get(cacheKey) === perState) tickListCache.delete(cacheKey);
+        });
+      }
+    }
+
+    const result: Record<string, LinearIssue[]> = {};
+    await Promise.all(
+      uniqueNames.map(async (name) => {
+        result[name] = await tickListCache.get(`state:${name}`)!;
+      })
+    );
+    return result;
+  }
+
   async function listIssuesInStateWithLabel(stateName: string, labelName: string): Promise<LinearIssue[]> {
     const cacheKey = `state+label:${stateName}:${labelName}`;
     const cached = tickListCache.get(cacheKey);
@@ -828,6 +895,7 @@ export function createLinearClient(scope: LinearScope) {
     linearDispatchHints,
     getIssue,
     listIssuesInState,
+    listIssuesInStates,
     countInState,
     listIssuesInStateWithLabel,
     setState,

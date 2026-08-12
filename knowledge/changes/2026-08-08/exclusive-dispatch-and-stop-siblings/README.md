@@ -53,8 +53,8 @@ timestamp: "2026-08-08T00:00:00Z"
 
 ## Deferred
 
-- Multi-process / multi-replica exclusivity (in-memory `activeRuns` is single-instance by design).
-- Closing orphan DB `running` rows for dead processes without a Linear transition.
+- ~~Multi-process / multi-replica exclusivity (in-memory `activeRuns` is single-instance by design).~~ — shipped: [knowledge/changes/2026-08-11/multi-process-dispatch-safety](../../2026-08-11/multi-process-dispatch-safety/README.md).
+- ~~Closing orphan DB `running` rows for dead processes without a Linear transition.~~ — shipped: [knowledge/changes/2026-08-11/multi-process-dispatch-safety](../../2026-08-11/multi-process-dispatch-safety/README.md).
 
 ## Bugs found in validation
 

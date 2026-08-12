@@ -16,6 +16,7 @@ export type IdKind =
   | "session"
   | "harness"
   | "user"
+  | "path"
   | "generic";
 
 const KIND_LABEL: Record<IdKind, string> = {
@@ -30,6 +31,7 @@ const KIND_LABEL: Record<IdKind, string> = {
   session: "Session ID",
   harness: "Harness ID",
   user: "User ID",
+  path: "Workspace path",
   generic: "ID",
 };
 

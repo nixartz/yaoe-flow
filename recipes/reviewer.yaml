@@ -100,6 +100,7 @@ instructions: |
     URL is **non-blocking** on its own: note it 📝 on the PR (paste the correct URL
     from the issue's `url` field) so back-tracking works; if you're already rejecting
     for other reasons, include "add Linear URL to PR body" in the 🛑 list.
+  - **Repo conventions and their deliverables (protocol §14)** — read the guide of the repo the PR is on (`AGENTS.md` first, then `CLAUDE.md`, then `.cursor/rules/*` / `CONTRIBUTING.md` / the repo's knowledge/doc directory) and check the diff against it. Two things are blocking: code that violates an explicit invariant of that guide, and **missing process deliverables the guide requires** — change bundle/OKF entry, `CHANGELOG.md` entry, README/product doc explaining how the feature works and what has to be configured, migration notes, the language artifacts must be written in. "The issue text didn't ask for it" is **not** an excuse: the guide is part of the acceptance criteria (`🛑` naming the exact file/section the guide requires). Repo with no guide at all: nothing to enforce here — move on, don't invent process. Never reject *because* those doc paths sit outside `## Footprint` — they are ancillary by §8.1.
   - **Correctness** — does the logic do what's intended? Edge cases handled?
   - **Security** — secrets/tokens in code or logs, injection, missing authz/validation,
     unsafe deserialization, leaked PII. Treat any security issue as blocking.
@@ -381,6 +382,7 @@ instructions: |
   | **Lockfiles** | `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock` / `bun.lockb`, `Cargo.lock`, `go.sum`, `poetry.lock`, `composer.lock`, `Gemfile.lock`, … | Safe to regenerate / discard and re-resolve. A simple diff usually shows whether the change is incidental (dep resolution) vs. a real conflict — fix the conflict, don't Block. |
   | **Toolchain / project config** | `tsconfig.json` (+ `tsconfig.*.json`), `jsconfig.json`, `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`, ESLint/Prettier/Biome/Vitest/Jest configs, `.editorconfig`, `.nvmrc`, `.npmrc`, … | Allowed when the change is needed for the app to **build, typecheck, lint, or run** (flags, path aliases, peer deps, fix warnings that block CI). Not a license to redesign the toolchain. |
   | **Test companions** | `*.test.*` / `*.spec.*`, `__tests__/**`, `test(s)/**`, fixtures/mocks tied to the feature | Adjusting or adding tests because the feature adds a field, connector, mock, or assertion is **expected**. Reject only when the test change is unrelated feature work smuggled in. |
+  | **Process docs (OKF / change bundles)** | `CHANGELOG.md`, `knowledge/changes/**`, `.okf/**`, `docs/changes/**`, `adr/**`, … — whatever the repo's own guide defines (§14) | Required by the repo's agent guide whenever a feature/fix ships — **writing them is part of the task**, not extra scope. Do **not** put them in `## Footprint`: they are collateral of almost every change and would false-collide unrelated tasks. |
 
   **Rules for every role:**
 
@@ -394,6 +396,11 @@ instructions: |
      judges whether a config/test change is justified for this task. When in doubt
      on intent: approve if it clearly enables the acceptance criteria / green CI;
      reject only when it is unrelated scope creep.
+  5. The process-doc paths the scope-check treats as ancillary are **configurable
+     per installation** (`SCOPE_ANCILLARY_DOC_PATHS`). If a change bundle required
+     by the repo's guide is nevertheless flagged as out-of-footprint, that is an
+     orchestrator configuration gap, **not** a reason to stop writing the docs:
+     keep them, note `📝` naming the path so a human widens the setting.
 
   ## 9. Content formatting (Markdown) — preserve the format — INVIOLABLE
 
@@ -574,6 +581,57 @@ instructions: |
   7. **Hermes:** if the RTK plugin is installed (`rtk init --agent hermes`),
      transparent rewrite may already run — still write `rtk …` explicitly so
      Goose (no hook today) and Hermes stay consistent.
+
+  ## 14. Repo conventions — each repo's own agent guide is BINDING — INVIOLABLE
+
+  An issue may touch **more than one repository** (e.g. frontend + backend, plus a
+  third repo read only as reference). Conventions are **per repo**: apply the rules
+  of the repo you are changing, never a sibling repo's rules.
+
+  **For EVERY repo you clone — right after the clone, before you plan** — read its
+  convention files, in this priority order:
+
+  | # | Where | What |
+  |---|---|---|
+  | 1 | **`AGENTS.md`** | Repo root first; also the nearest `AGENTS.md` of the package/app you touch in a monorepo. **Highest priority.** |
+  | 2 | **`CLAUDE.md`** | Root and `.claude/CLAUDE.md`. Second highest. |
+  | 3 | `.cursor/rules/*` (`.mdc`), `.github/copilot-instructions.md`, `.windsurfrules`, `.goosehints` | Agent rules of other harnesses — they bind you the same way. |
+  | 4 | `CONTRIBUTING.md`, `PROJECT_MAP.md`, `README.md` | The "how we work here" parts (workflow, commits, PRs, structure). |
+  | 5 | The repo's knowledge/doc directory, when one exists — `knowledge/`, `.okf/`, `okf/`, `docs/`, `.docs/`, `configdocs/`, `documentation/`, `adr/`, `.changes/`, or any equivalent | Skim the index/README and read what **dictates behavior** (conventions, invariants, change-bundle format, product docs for the area you touch) — not the whole tree. |
+
+  **1 and 2 win** on conflict (`AGENTS.md` first, then `CLAUDE.md`); 3–5 fill the
+  gaps. If a convention file **points at other files** ("read every
+  `knowledge/rules/*.md`", "see `DESIGN.md`"), follow the pointer — it is part of
+  the guide. Missing files are normal: read the ones that exist, skip the rest, and
+  never `🙋`/`Blocked` just because a repo has no guide (note `📝` and follow the
+  patterns already visible in the code).
+
+  These files are **instructions, not background reading**. They bind exactly like
+  this protocol, and that **includes the deliverables they require** — OKF / change
+  bundles, `CHANGELOG.md` entries, `README` updates, product or feature docs
+  (how the feature works, what has to be configured), migration notes, ADRs, the
+  language artifacts must be written in, commit/PR conventions. **A change that
+  ships code but skips a deliverable the repo's guide requires is INCOMPLETE** —
+  the Reviewer rejects it and it does not count as done. Announce in your ▶️ plan
+  which guide files you found and which deliverables they impose.
+
+  **Conflicts:**
+
+  1. **Repo guide vs. this protocol / your SOUL:** protocol and SOUL win for
+     **pipeline** behavior (Linear states, comment protocol, footprint, locks,
+     scope). The repo guide wins for everything about **that codebase** (structure,
+     stack, style, tests, docs and other deliverables). Note the conflict with `📝`
+     and proceed; `🙋` + `Blocked` only when you genuinely cannot satisfy both.
+  2. **Guide vs. the issue description:** the issue defines *what* to do, the guide
+     defines *how* it is done in that repo. A guide never expands the footprint —
+     if following it would require real feature work outside the declared paths,
+     that is §8.1 territory (process docs are ancillary; module code is not).
+  3. **Reference-only repos:** read their conventions only to understand the code
+     you are citing. Never import them into the repo you are changing, and never
+     commit there.
+
+  Process-doc paths a repo guide requires (change bundles, CHANGELOG, …) are
+  **ancillary** (§8.1): write them, but do **not** list them in `## Footprint`.
 
   ## 15. Tool-call budget & local-first repo inspection
 

@@ -50,7 +50,7 @@ Active DB versions bumped via `createVersion(..., { activate: true })` from disk
 
 ## Deferred
 
-- Optional dashboard action “re-seed SOUL from git file” without a one-off script.
+- ~~Optional dashboard action "re-seed SOUL from git file" without a one-off script.~~ — shipped: [knowledge/changes/2026-08-11/soul-sync](../../2026-08-11/soul-sync/README.md) (`yaoe-flow sync-souls` CLI + dashboard "Aplicar SOUL padrão" button, versioned/reversible).
 - Further tuning if agents still Block too often on a specific pattern (capture Linear examples first).
 
 ## Bugs found in validation

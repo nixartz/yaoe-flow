@@ -1,0 +1,107 @@
+name: auto-release
+
+# Cuts a release automatically after a merge to main — no operator running
+# `bun scripts/release.ts` by hand. Two guards keep this from firing on
+# every merge:
+#   - skips (not a failure) when CHANGELOG.md's [Unreleased] section is
+#     empty — not every merge should ship (docs/chore/etc. PRs leave it
+#     empty by convention).
+#   - skips its own "release: vX.Y.Z" commit, so the bump commit this
+#     workflow pushes to main does not loop back into itself. (It wouldn't
+#     anyway — a push made with the default GITHUB_TOKEN does not trigger
+#     other workflow runs — but the guard also covers a human pushing that
+#     exact commit shape directly.)
+#
+# Bump kind defaults to patch. Add label `release:minor` or `release:major`
+# to the PR being merged to override (create these two labels once in the
+# repo's Issues → Labels settings before relying on this).
+#
+# The actual build/verify/publish steps live in release.yml, called here as
+# a reusable workflow (workflow_call) rather than relying on this job's own
+# tag push to retrigger release.yml's `on: push: tags` — see the comment at
+# the top of release.yml for why that path doesn't fire on its own.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cut:
+    if: "${{ !startsWith(github.event.head_commit.message, 'release: v') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.cut.outputs.version }}
+      cut: ${{ steps.gate.outputs.empty == 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Skip when CHANGELOG [Unreleased] is empty
+        id: gate
+        run: |
+          section=$(awk '/^## \[Unreleased\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md | sed '/^[[:space:]]*$/d')
+          if [ -z "$section" ]; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::CHANGELOG [Unreleased] is empty — skipping auto-release for this merge."
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: oven-sh/setup-bun@v2
+        if: steps.gate.outputs.empty == 'false'
+        with:
+          bun-version: latest
+
+      - name: Determine bump kind from the merged PR's labels (default patch)
+        id: bump
+        if: steps.gate.outputs.empty == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          kind="patch"
+          pr_number=$(printf '%s' "$HEAD_COMMIT_MESSAGE" | grep -oE '#[0-9]+' | head -1 | tr -d '#' || true)
+          if [ -n "$pr_number" ]; then
+            labels=$(gh pr view "$pr_number" --repo "${{ github.repository }}" --json labels -q '.labels[].name' 2>/dev/null || true)
+            if printf '%s\n' "$labels" | grep -qx "release:major"; then
+              kind="major"
+            elif printf '%s\n' "$labels" | grep -qx "release:minor"; then
+              kind="minor"
+            fi
+          fi
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+
+      - name: Cut release (bump + changelog + commit + tag + push)
+        id: cut
+        if: steps.gate.outputs.empty == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUMP_KIND: ${{ steps.bump.outputs.kind }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # actions/checkout leaves a detached HEAD; scripts/release.ts asserts
+          # it's running on main the same way a human operator would be.
+          git checkout -B main
+          bun scripts/release.ts "--$BUMP_KIND" --yes --no-wait --no-pr
+          version=$(node -p "require('./app/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: cut
+    if: needs.cut.outputs.cut == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.cut.outputs.version }}
+      ref: refs/tags/v${{ needs.cut.outputs.version }}

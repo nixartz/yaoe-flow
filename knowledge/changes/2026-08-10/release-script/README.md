@@ -41,5 +41,5 @@ timestamp: "2026-08-10T00:00:00Z"
 
 ## Deferred
 
-- `gh release view` / wait-for-workflow polling after push.
-- Auto-opening a PR when not on `main` (currently `--allow-branch` only).
+- ~~`gh release view` / wait-for-workflow polling after push.~~ — shipped: [knowledge/changes/2026-08-11/release-script-polling-and-pr](../../2026-08-11/release-script-polling-and-pr/README.md).
+- ~~Auto-opening a PR when not on `main` (currently `--allow-branch` only).~~ — shipped: [knowledge/changes/2026-08-11/release-script-polling-and-pr](../../2026-08-11/release-script-polling-and-pr/README.md).

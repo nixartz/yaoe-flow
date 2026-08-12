@@ -14,7 +14,7 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   if (args.length === 0) {
     const { bootServer } = await import("./server");
-    bootServer();
+    await bootServer();
   } else {
     const { runCli } = await import("./cli");
     await runCli(args);

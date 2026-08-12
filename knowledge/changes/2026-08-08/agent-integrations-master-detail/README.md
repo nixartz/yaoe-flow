@@ -52,7 +52,7 @@ timestamp: "2026-08-08T08:30:00Z"
 
 ## Deferred
 
-- Persist selection across harness switches.
+- ~~Persist selection across harness switches.~~ Resolved 2026-08-11 (also turned out to reset on any tab switch, not just harness switch — Radix `Tabs` unmounts inactive content): [knowledge/changes/2026-08-11/dashboard-integration-and-workspace-affordances](../../2026-08-11/dashboard-integration-and-workspace-affordances/README.md).
 - Mobile: stack is fine; no separate drawer for detail yet.
 - Visual regression / axe CI for this screen (not in dashboard gate today).
 

@@ -2,24 +2,14 @@
 // Matcher: Bun.Glob — `**` is globstar (zero or more path segments), mid-path `*` is
 // one segment. Dialect: a trailing `/*` means the whole subtree (same as `/**`),
 // matching the SOUL convention `<module>/*` as a directory lock/ceiling.
-import { Glob } from "bun";
+// The matcher itself lives in footprint-glob.ts (shared with
+// footprint-ancillary.ts, which also matches globs) — re-exported here because
+// scope.ts and the tests import `isWithinFootprint`/`toGlobPattern` from this module.
 import type { Footprint } from "./types";
 import { isAncillaryScopePath } from "./footprint-ancillary";
+import { cleanPath, hasGlobMeta, isWithinFootprint, toGlobPattern } from "./footprint-glob";
 
-function cleanPath(p: string): string {
-  return p.replace(/\\/g, "/").replace(/\/+$/, "");
-}
-
-function hasGlobMeta(p: string): boolean {
-  return /[*?\[]/.test(p);
-}
-
-/** Trailing `/*` (exactly one star) → `/**` so `<module>/*` covers the whole tree. */
-export function toGlobPattern(entry: string): string {
-  const p = cleanPath(entry);
-  if (/\/\*$/.test(p) && !/\/\*\*$/.test(p)) return `${p.slice(0, -1)}**`;
-  return p;
-}
+export { isWithinFootprint, toGlobPattern } from "./footprint-glob";
 
 /** Collapse wildcards to a concrete witness path (for collision membership checks). */
 export function collapseGlobToPath(pattern: string): string {
@@ -47,31 +37,37 @@ function literalPrefixesNest(a: string, b: string): boolean {
   return pa === pb || pa.startsWith(`${pb}/`) || pb.startsWith(`${pa}/`);
 }
 
-// Um arquivo concreto está "dentro" de uma entrada de footprint?
-//   isWithinFootprint("src/auth/login.ts", "src/auth/*")           → true (subtree)
-//   isWithinFootprint("src/auth/deep/x.ts", "src/auth/*")          → true (trailing /* = recursive)
-//   isWithinFootprint("src/app/perfil/page.tsx", "src/app/**/perfil/**") → true (** = empty ok)
-//   isWithinFootprint("src/api/x.ts", "src/auth/*")                → false
-//   isWithinFootprint(qualquer, "*")                               → true (lock de repo inteiro)
-export function isWithinFootprint(file: string, footprintEntry: string): boolean {
-  const entry = cleanPath(footprintEntry);
-  if (entry === "*" || entry === "") return true;
-  const f = cleanPath(file);
-  const pattern = toGlobPattern(entry);
+/**
+ * The literal segment right after a pattern's FIRST globstar, when that
+ * globstar sits immediately after the literal prefix (prefix, globstar,
+ * segment, ...). Returns null when there's no such globstar, the next
+ * segment is itself a wildcard, or the globstar is trailing (prefix +
+ * globstar alone, which still matches everything under prefix — ambiguous
+ * on purpose).
+ */
+function firstLiteralSegmentAfterLeadingGlobstar(pattern: string): string | null {
+  const p = toGlobPattern(cleanPath(pattern));
+  const prefix = literalPrefix(pattern);
+  const rest = (prefix ? p.slice(prefix.length) : p).replace(/^\//, "");
+  if (!rest.startsWith("**/")) return null;
+  const nextSeg = rest.slice(3).split("/")[0];
+  if (!nextSeg || hasGlobMeta(nextSeg)) return null;
+  return nextSeg;
+}
 
-  if (!hasGlobMeta(pattern)) {
-    return f === pattern || f.startsWith(`${pattern}/`);
-  }
-
-  if (new Glob(pattern).match(f)) return true;
-  // `foo/**` does not match the directory node `foo` itself; the old prefix
-  // dialect did. Only apply when the stem has no remaining wildcards (otherwise
-  // `src/app/**/perfil/**` would invent a literal `**` prefix).
-  if (pattern.endsWith("/**")) {
-    const base = pattern.slice(0, -3);
-    if (base && !hasGlobMeta(base) && f === base) return true;
-  }
-  return false;
+/**
+ * Narrow, provable disjointness: two patterns sharing the exact same literal
+ * prefix, both followed by `**` then a literal segment — if those segments
+ * differ, no single path can satisfy both (a path segment can't equal two
+ * different literal strings at once). Anything else (nested-but-unequal
+ * prefixes, a `*`/`**` in that position) stays conservative (collides).
+ */
+function disjointAfterSharedGlobstar(a: string, b: string): boolean {
+  if (literalPrefix(a) !== literalPrefix(b)) return false;
+  const segA = firstLiteralSegmentAfterLeadingGlobstar(a);
+  const segB = firstLiteralSegmentAfterLeadingGlobstar(b);
+  if (segA === null || segB === null) return false;
+  return segA !== segB;
 }
 
 // Separa o qualificador de repo ("repoA:src/x" → repo "repoA", path "src/x").
@@ -96,7 +92,10 @@ function entriesCollide(a: string, b: string): boolean {
   const overlap =
     isWithinFootprint(collapseGlobToPath(ea.path), eb.path) ||
     isWithinFootprint(collapseGlobToPath(eb.path), ea.path) ||
-    (hasGlobMeta(ea.path) && hasGlobMeta(eb.path) && literalPrefixesNest(ea.path, eb.path));
+    (hasGlobMeta(ea.path) &&
+      hasGlobMeta(eb.path) &&
+      literalPrefixesNest(ea.path, eb.path) &&
+      !disjointAfterSharedGlobstar(ea.path, eb.path));
   if (!overlap) return false;
   // Overlap SÓ em paths ancillary (locks/config) não serializa — protocolo §8.1.
   const aWitness = collapseGlobToPath(ea.path) || ea.path;

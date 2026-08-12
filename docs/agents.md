@@ -25,6 +25,29 @@ What each agent role does, how it is configured today, and the issue structure t
 
 Behavior is defined by **SOULs** — versioned system prompts. `agents/*.SOUL.md` are the seed/interchange copies in git; at runtime the source of truth is the database (dashboard → Agents → versions). Every SOUL is concatenated with `agents/COMMUNICATION_PROTOCOL.md`, the pipeline contract every role obeys (comment format, status transitions, scope isolation rules).
 
+### Picking up the SOULs of a new version
+
+The seed only runs on a **fresh** database: once agents exist, upgrading the binary does not touch the SOULs already in use — otherwise an upgrade would silently overwrite what you tuned on the dashboard. When a release changes agent behavior, apply it explicitly:
+
+```bash
+yaoe-flow sync-souls
+```
+
+It prints, per role, the active version against the SOUL bundled in the running binary (`v3 (a1b2c3…, 120 lines) → v4 (…)`) and only writes after you confirm — `--yes` for scripted upgrades, `--role dev,reviewer` for a subset. The dashboard has the same action: **Agents → Aplicar SOUL padrão**, with the same plan and confirmation.
+
+Either way, the SOUL being replaced is **kept in the agent's history** as its own version (Agents → edit → versions) and can be reactivated at any time. Local edits are *not* merged: the bundled text becomes a new active version on top of yours. No restart is needed — the next dispatch already uses it.
+
+## Your repo's conventions (`AGENTS.md`, `CLAUDE.md`, …)
+
+Agents do **not** inherit your repo's rules from the harness: the ACP session opens on the empty issue workspace and the repository is cloned into it afterwards, so `cursor-agent`/Claude Code/Codex never auto-discover your `AGENTS.md`. The pipeline handles it explicitly instead — **protocol §14**: right after each clone, every role reads that repo's guide before planning, in priority order `AGENTS.md` → `CLAUDE.md` → `.cursor/rules/*` / `.github/copilot-instructions.md` → `CONTRIBUTING.md` / `PROJECT_MAP.md` / `README.md` → the repo's knowledge/doc directory (`knowledge/`, `.okf/`, `docs/`, `.docs/`, `configdocs/`, `adr/`, …), following any pointers those files contain.
+
+Two consequences worth knowing when you write a guide for your own repo:
+
+- **Conventions are per repo.** An issue may span several repositories (frontend + backend, plus one read only as reference); each one is judged by its own guide, and a reference-only repo is never written to.
+- **Required deliverables are part of "done".** If your guide says every change ships a change bundle / OKF entry, a `CHANGELOG.md` line, or a doc describing how the feature works and what has to be configured, then a PR without them is incomplete: PMO turns them into explicit checklist items, Dev must write them in the same PR, and Reviewer rejects when they are missing. Be specific in the guide (name the directory and the format) — vague guides produce vague deliverables.
+
+Process-doc paths are treated as **ancillary** (protocol §8.1): agents write them without declaring them in `## Footprint`, and the deterministic scope-check skips them. Which paths count is configurable — see `SCOPE_ANCILLARY_DOC_PATHS` in [github-setup.md](github-setup.md#process-docs-and-the-scope-check).
+
 ## The issue structure PMO produces
 
 A refined issue contains, in its description/comments:

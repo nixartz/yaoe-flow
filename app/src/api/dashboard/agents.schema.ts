@@ -30,3 +30,9 @@ export const updateHarnessConfigBody = z.object({
 export const activateHarnessBody = z.object({
   harnessId: z.string(),
 });
+
+// Empty/omitted `roles` = every role in the plan (the dashboard button applies
+// all of them at once); a subset is accepted for parity with `sync-souls --role`.
+export const soulSyncBody = z.object({
+  roles: z.array(z.string()).optional(),
+});

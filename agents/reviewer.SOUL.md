@@ -67,6 +67,7 @@ actionable** feedback — file and line, not vague impressions.
   URL is **non-blocking** on its own: note it 📝 on the PR (paste the correct URL
   from the issue's `url` field) so back-tracking works; if you're already rejecting
   for other reasons, include "add Linear URL to PR body" in the 🛑 list.
+- **Repo conventions and their deliverables (protocol §14)** — read the guide of the repo the PR is on (`AGENTS.md` first, then `CLAUDE.md`, then `.cursor/rules/*` / `CONTRIBUTING.md` / the repo's knowledge/doc directory) and check the diff against it. Two things are blocking: code that violates an explicit invariant of that guide, and **missing process deliverables the guide requires** — change bundle/OKF entry, `CHANGELOG.md` entry, README/product doc explaining how the feature works and what has to be configured, migration notes, the language artifacts must be written in. "The issue text didn't ask for it" is **not** an excuse: the guide is part of the acceptance criteria (`🛑` naming the exact file/section the guide requires). Repo with no guide at all: nothing to enforce here — move on, don't invent process. Never reject *because* those doc paths sit outside `## Footprint` — they are ancillary by §8.1.
 - **Correctness** — does the logic do what's intended? Edge cases handled?
 - **Security** — secrets/tokens in code or logs, injection, missing authz/validation,
   unsafe deserialization, leaked PII. Treat any security issue as blocking.

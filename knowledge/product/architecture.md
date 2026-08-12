@@ -20,7 +20,7 @@ timestamp: "2026-08-02T00:00:00Z"
 
 ## The pipeline in one paragraph
 
-Linear is the source of truth: issue **statuses** drive the pipeline, humans curate with **labels** (`ready-to-refine`, `ready-to-implement`, `ready-to-merge`), and every agent action lands as a Linear comment. The `yaoe-flow` daemon (one process: API + scheduler + dashboard) receives Linear webhooks and, as a safety net, reconciles on a periodic tick (`TICK_INTERVAL_MS`, default 15s). For each dispatchable issue it picks the role's **active agent** (dashboard entity: SOUL + harness + model + MCPs), clones the target repo into an **issue-scoped workspace** (`$YAOE_HOME/worktrees/issue-<issueId>`), runs the harness, and records the full run (trace, usage, cost) for the dashboard.
+Linear is the source of truth: issue **statuses** drive the pipeline, humans curate with **labels** (`ready-to-refine`, `ready-to-implement`, `ready-to-merge`), and every agent action lands as a Linear comment. The `yaoe-flow` daemon (one process: API + scheduler + dashboard) receives Linear webhooks and, as a safety net, reconciles on a periodic tick (`TICK_INTERVAL_MS`, default 30s). For each dispatchable issue it picks the role's **active agent** (dashboard entity: SOUL + harness + model + MCPs), clones the target repo into an **issue-scoped workspace** (`$YAOE_HOME/worktrees/issue-<issueId>`), runs the harness, and records the full run (trace, usage, cost) for the dashboard.
 
 ## State machine (Linear statuses)
 
@@ -50,7 +50,7 @@ To Do ──► Refining ──► Planned ──► In Progress ──► Code 
 | Reviewer | Code Review | `MAX_REVIEWER_WORKERS` | Read-only audit: traceability, scope (diff ⊆ footprint), bugs, security. Approves or reopens. |
 | Orchestrator | Pending Merge (+label) & planning | `MAX_ORCHESTRATOR_WORKERS` | Footprint planning (JSON-only reply) and the final merge, serialized by a mutex. |
 
-Behavior lives in **SOULs** (`agents/*.SOUL.md` as seed; database as runtime source of truth) concatenated with `agents/COMMUNICATION_PROTOCOL.md` — the pipeline contract shared by every role. Human-facing output language is configurable (`AGENT_OUTPUT_LANGUAGE`). Agents reserve `🙋` + Linear **Blocked** for protocol §5 (product/safety/access / empty repo); within a named repo they prefer `📝` + proceed. Scheduler footprint locks only delay dispatch — they are not a Blocked transition.
+Behavior lives in **SOULs** (`agents/*.SOUL.md` as seed; database as runtime source of truth) concatenated with `agents/COMMUNICATION_PROTOCOL.md` — the pipeline contract shared by every role. The seed only populates an EMPTY `agents` table, so an upgrade never rewrites a tuned SOUL by itself: bringing the bundled SOULs into an existing install is an explicit, confirmed step (`yaoe-flow sync-souls` or Agents → *Aplicar SOUL padrão*), and it appends a new active version while keeping the replaced one in history (`app/src/agent/soulSync.ts`). Human-facing output language is configurable (`AGENT_OUTPUT_LANGUAGE`). Agents reserve `🙋` + Linear **Blocked** for protocol §5 (product/safety/access / empty repo); within a named repo they prefer `📝` + proceed. Scheduler footprint locks only delay dispatch — they are not a Blocked transition.
 
 ## Collision-freedom: footprints and locks
 
@@ -72,6 +72,7 @@ Per-issue workspace: every harness (ACP, Goose, Hermes-adjacent local cwd users)
 - `MAX_ATTEMPTS` circuit breaker sends looping issues to Blocked.
 - `reclaimStale()` releases every acquired resource (locks, seats, run rows); a retention sweep prunes runs/webhooks/logs.
 - The reconciliation tick survives missed webhooks — including **stale footprint locks**: if an issue reaches Completed (or otherwise leaves lock-holding states) without the release webhook landing, `reconcileStaleLocks()` drops the Valkey lock on the next tick so Planned candidates are not blocked forever. The same tick runs **`reconcileStaleWorkspaces()`** to delete on-disk `issue-*` dirs whose Linear state left the workspace-holding set (Refining/Planned/In Progress/…/Blocked).
+- **Cross-process dispatch safety**: `runDispatch` claims a Valkey per-issue/role dispatch lease before spawning any harness process, so two daemon processes sharing a `YAOE_HOME`+Valkey can't double-dispatch the same issue. A boot-time `orch:daemon:lock` (renewed every tick) detects a second live instance and disables its tick/dispatch (API/dashboard stay up); on a confirmed solo boot, any `runs` row left `status='running'` by a killed process is flipped to `failed` (DB-only — no Linear transition, `reconcileStaleLocks()` handles the Linear side independently).
 - Linear GraphQL rate limits (5 000 req/h per API key): the client tracks `X-RateLimit-Requests-*` headers and `RATELIMITED` errors, enters a cooldown until reset, and skips ticks / readiness snapshots when the remaining budget is too low. List/getIssue calls are memoized within a single connection reconcile.
 
 ## Storage and disk layout

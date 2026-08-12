@@ -48,7 +48,7 @@ timestamp: "2026-08-07T00:00:00Z"
 ## Deferred
 
 - Migrating leftover `run-*` dirs from older builds (operator can delete manually).
-- Optional dashboard "open workspace path" affordance.
+- ~~Optional dashboard "open workspace path" affordance.~~ Resolved 2026-08-11 as display + copy (not a literal "open", since the dashboard may run on a different machine than the daemon): [knowledge/changes/2026-08-11/dashboard-integration-and-workspace-affordances](../../2026-08-11/dashboard-integration-and-workspace-affordances/README.md).
 
 ## Validation notes
 
