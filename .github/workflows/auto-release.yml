@@ -61,6 +61,17 @@ jobs:
         with:
           bun-version: latest
 
+      # scripts/release.ts runs `cd app && bun test` before committing (this
+      # workflow deliberately does not pass --skip-tests — the test run is
+      # the whole point of the safety net). Without app/'s own deps installed
+      # first, every test that imports a package (drizzle-orm, pino, ...)
+      # fails with "Cannot find package", which looks like a real test
+      # failure but is really just a missing install step.
+      - name: Install app dependencies (for scripts/release.ts's internal test run)
+        if: steps.gate.outputs.empty == 'false'
+        working-directory: app
+        run: bun install --frozen-lockfile
+
       - name: Determine bump kind from the merged PR's labels (default patch)
         id: bump
         if: steps.gate.outputs.empty == 'false'

@@ -41,6 +41,8 @@ timestamp: "2026-08-11T00:00:00Z"
 
 `atomicReplace` on Windows can fail if the running `.exe`'s file is locked by the OS. This is a genuine best-effort limitation: `cmdUpdate` catches the failure, leaves the verified-but-not-installed download in place conceptually (the staged temp file is removed, but nothing is lost — re-running `yaoe-flow update` re-downloads), and prints an explicit instruction to `yaoe-flow stop` first and retry. Not attempting a more invasive workaround (e.g. a spawned helper process) — out of scope for this change, and the failure mode is safe (verified download discarded, old binary untouched) rather than silent or corrupting.
 
+**Follow-up fix (double-check review, same day):** the Windows path itself had a gap — it renames the running `.exe` aside (`target` → `target.old`) *then* renames the new file into `target`. If the first rename succeeded but the second one then failed, the function threw without putting `target.old` back, leaving `target` (the daemon's own binary) **missing entirely** — a strictly worse outcome than "update failed, old binary untouched." `atomicReplace` now tracks whether the first rename actually happened and, if the second one throws, restores `target.old` → `target` before rethrowing, so the documented failure mode ("verified download discarded, old binary untouched") is what the code actually guarantees.
+
 ### Layers
 
 | Layer | Changed? |
