@@ -6,6 +6,8 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-08-12
+
 ### Added
 
 - **`yaoe-flow sync-souls` + dashboard button "Aplicar SOUL padrão"**: re-import the SOULs bundled with the running binary into the database. Until now the seed only ran on an empty `agents` table, so an upgrade that changed agent behavior never reached an existing install (the only workaround was pasting each SOUL into a new version by hand). Both surfaces show a read-only plan first — per role, active version vs. bundled SOUL with content hash and line counts — and write only after confirmation (`--yes` for scripts, `--role` for a subset; a non-TTY without `--yes` refuses). The replaced SOUL is kept in the agent's version history and can be reactivated; local dashboard edits are not merged. No restart needed. OKF: [knowledge/changes/2026-08-11/soul-sync](knowledge/changes/2026-08-11/soul-sync/README.md).
