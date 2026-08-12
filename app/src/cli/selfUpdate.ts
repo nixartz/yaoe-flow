@@ -68,17 +68,29 @@ export function extractExpectedSha(sums: string, asset: string): string | null {
  * run against a live daemon binary.
  * Windows: a running .exe can hold its file locked, so rename-over can fail;
  * best effort is to move the old file aside first, then move the new one in.
- * If the OS still refuses (lock held by the running process), this throws —
- * the caller prints a manual fallback ("stop the daemon, then retry").
+ * If moving the old file aside succeeded but moving the new one in then fails
+ * (e.g. a transient AV scan lock), targetPath would otherwise be left with no
+ * binary at all — worse than the pre-update state — so that case rolls the
+ * old file back into place before rethrowing. If the OS still refuses (lock
+ * held by the running process on the FIRST move), this throws with targetPath
+ * untouched — the caller prints a manual fallback ("stop the daemon, then retry").
  */
 export function atomicReplace(targetPath: string, newFileTmpPath: string): void {
   if (process.platform === "win32") {
+    const oldPath = `${targetPath}.old`;
+    let movedOld = false;
     try {
-      renameSync(targetPath, `${targetPath}.old`);
+      renameSync(targetPath, oldPath);
+      movedOld = true;
     } catch {
       // no previous file to move aside — proceed anyway
     }
-    renameSync(newFileTmpPath, targetPath);
+    try {
+      renameSync(newFileTmpPath, targetPath);
+    } catch (e) {
+      if (movedOld) renameSync(oldPath, targetPath);
+      throw e;
+    }
     return;
   }
   renameSync(newFileTmpPath, targetPath);
