@@ -9,6 +9,13 @@ import { log, errFields } from "../../logger";
 import { createAcpAdapter, detectByVersionFlag, type AcpSpawnContext, type AcpSpawnPrep } from "./acpAdapter";
 import { hostHome, mirrorDirExcept, writeClaudeCodeAttribution } from "./attribution";
 
+/** Env vars that authenticate Claude Code without touching the OS credential store. */
+const STATIC_CREDENTIAL_ENV_VARS = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"] as const;
+
+function hasStaticCredential(env: Record<string, string>): boolean {
+  return STATIC_CREDENTIAL_ENV_VARS.some((k) => Boolean(env[k]?.trim()));
+}
+
 function buildEnv(input: AcpSpawnContext): Record<string, string> {
   const env = { ...input.env };
   const apiKey = (input.settings.apiKey as string | undefined) || env.ANTHROPIC_API_KEY;
@@ -19,13 +26,45 @@ function buildEnv(input: AcpSpawnContext): Record<string, string> {
 }
 
 /**
+ * Whether isolating `CLAUDE_CONFIG_DIR` into a per-run dir is safe.
+ *
+ * On macOS Claude Code keeps OAuth/subscription credentials in the system
+ * Keychain under a service name derived from the *literal* `CLAUDE_CONFIG_DIR`
+ * value: unset/default → `Claude Code-credentials`; any custom path → a
+ * distinct `Claude Code-credentials-<hash>` entry (confirmed via
+ * `security dump-keychain`). Mirroring `~/.claude` into a new per-run
+ * directory therefore lands on a hashed entry that was never logged into —
+ * every turn fails with ACP "Authentication required" even though `claude`
+ * works fine on the host with the same login. A static credential (API key /
+ * long-lived OAuth token) bypasses the Keychain entirely and travels fine
+ * through any `CLAUDE_CONFIG_DIR`. Same class of issue already documented for
+ * Cursor's per-run HOME mirror (docs/harnesses.md) — headless/subscription
+ * login and per-run isolation don't mix on macOS.
+ */
+export function shouldSkipConfigIsolation(
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  return platform === "darwin" && !hasStaticCredential(env);
+}
+
+/**
  * `CLAUDE_CONFIG_DIR` por run com atribuição do orquestrador.
  * Espelha `~/.claude` (auth/sessões/plugins) e substitui só `settings.json`
- * — assim o flag `CLAUDE_CODE_ATTRIBUTION` vale sem tocar o config do host e
- * sem perder o login (Keychain no macOS; credentials no dir no Linux).
+ * — assim o flag `CLAUDE_CODE_ATTRIBUTION` vale sem tocar o config do host.
+ * No macOS com login por assinatura (sem API key/token), pulamos o isolamento
+ * — ver `shouldSkipConfigIsolation` — e a atribuição simplesmente não é
+ * aplicada nesse run; login/turno funcionando vale mais que o trailer do commit.
  * https://code.claude.com/docs/en/settings#attribution-settings
  */
 export function prepareClaudeCodeAttribution(input: AcpSpawnContext, env: Record<string, string>): AcpSpawnPrep {
+  if (shouldSkipConfigIsolation(env)) {
+    log.agent.info(
+      { harness: "claude-code", runId: input.runId },
+      "macOS subscription login (no static credential): skipping per-run CLAUDE_CONFIG_DIR to keep Keychain auth working — attribution settings not applied this run"
+    );
+    return { env };
+  }
   const configDir = `${input.cwd.replace(/[/\\]+$/, "")}-claude-config`;
   const realClaude = join(hostHome(env), ".claude");
   try {

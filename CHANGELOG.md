@@ -6,6 +6,10 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+### Fixed
+
+- **Claude Code harness: `Authentication required` on every turn when running on macOS with a subscription login**: the per-run `CLAUDE_CONFIG_DIR` isolation (used to apply the `CLAUDE_CODE_ATTRIBUTION` toggle without touching the operator's real `~/.claude/settings.json`) pointed the CLI at a brand-new directory each run. On macOS, subscription/OAuth credentials live in the system Keychain under a service name keyed by the *literal* `CLAUDE_CONFIG_DIR` path, so a fresh path always landed on an empty, never-logged-in Keychain entry — even though `claude` worked fine when run manually with the same login. The harness now skips this isolation on macOS when no static credential (`ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` / `CLAUDE_CODE_OAUTH_TOKEN`) is configured, authenticating against the host's real `~/.claude` instead (attribution simply doesn't apply for that run); Linux and macOS-with-API-key runs are unaffected. OKF: [knowledge/changes/2026-08-24/claude-code-macos-keychain-auth](knowledge/changes/2026-08-24/claude-code-macos-keychain-auth/README.md).
+
 ## [0.1.8] - 2026-08-12
 
 ### Added

@@ -8,6 +8,7 @@ import {
   writeCursorCliAttribution,
 } from "../src/agent/harness/attribution";
 import { isolatedCursorHome } from "../src/agent/harness/cursor";
+import { prepareClaudeCodeAttribution, shouldSkipConfigIsolation } from "../src/agent/harness/claudeCode";
 import { invalidateSettingsCache, resetSetting, setSetting } from "../src/config/service";
 
 afterEach(() => {
@@ -127,5 +128,61 @@ describe("Cursor isolation + attribution", () => {
     prep.cleanup?.();
     expect(existsSync(isolated)).toBe(false);
     rmSync(realHome, { recursive: true, force: true });
+  });
+});
+
+describe("Claude Code CLAUDE_CONFIG_DIR isolation vs macOS Keychain auth", () => {
+  test("shouldSkipConfigIsolation: darwin sem credencial estática pula isolamento", () => {
+    expect(shouldSkipConfigIsolation({}, "darwin")).toBe(true);
+    expect(shouldSkipConfigIsolation({ ANTHROPIC_API_KEY: "sk-ant-x" }, "darwin")).toBe(false);
+    expect(shouldSkipConfigIsolation({ CLAUDE_CODE_OAUTH_TOKEN: "tok" }, "darwin")).toBe(false);
+    expect(shouldSkipConfigIsolation({ ANTHROPIC_AUTH_TOKEN: "tok" }, "darwin")).toBe(false);
+    expect(shouldSkipConfigIsolation({}, "linux")).toBe(false);
+    expect(shouldSkipConfigIsolation({}, "win32")).toBe(false);
+  });
+
+  test("prepareClaudeCodeAttribution: darwin sem credencial mantém CLAUDE_CONFIG_DIR do host (não isola)", () => {
+    const realHome = mkdtempSync(join(TEST_TMP_DIR, "fake-home-claude-"));
+    const cwd = join(mkdtempSync(join(TEST_TMP_DIR, "run-ws-claude-")), "issue-1");
+    mkdirSync(cwd, { recursive: true });
+
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    Object.defineProperty(process, "platform", { value: "darwin" });
+    try {
+      const prep = prepareClaudeCodeAttribution(
+        { runId: "run-claude-mac", cwd, settings: {}, env: { HOME: realHome } },
+        { HOME: realHome }
+      );
+      expect(prep.env!.CLAUDE_CONFIG_DIR).toBeUndefined();
+      expect(prep.cleanup).toBeUndefined();
+      expect(existsSync(`${cwd}-claude-config`)).toBe(false);
+    } finally {
+      Object.defineProperty(process, "platform", originalPlatform);
+      rmSync(realHome, { recursive: true, force: true });
+    }
+  });
+
+  test("prepareClaudeCodeAttribution: darwin COM API key isola normalmente", () => {
+    const realHome = mkdtempSync(join(TEST_TMP_DIR, "fake-home-claude-key-"));
+    mkdirSync(join(realHome, ".claude"), { recursive: true });
+    const cwd = join(mkdtempSync(join(TEST_TMP_DIR, "run-ws-claude-key-")), "issue-1");
+    mkdirSync(cwd, { recursive: true });
+
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    Object.defineProperty(process, "platform", { value: "darwin" });
+    try {
+      const prep = prepareClaudeCodeAttribution(
+        { runId: "run-claude-mac-key", cwd, settings: {}, env: { HOME: realHome, ANTHROPIC_API_KEY: "sk-ant-x" } },
+        { HOME: realHome, ANTHROPIC_API_KEY: "sk-ant-x" }
+      );
+      const configDir = prep.env!.CLAUDE_CONFIG_DIR!;
+      expect(configDir).toBe(`${cwd}-claude-config`);
+      expect(existsSync(join(configDir, "settings.json"))).toBe(true);
+      prep.cleanup?.();
+      expect(existsSync(configDir)).toBe(false);
+    } finally {
+      Object.defineProperty(process, "platform", originalPlatform);
+      rmSync(realHome, { recursive: true, force: true });
+    }
   });
 });

@@ -25,7 +25,7 @@ Setup is mostly automatic for local CLIs: the `yaoe-flow setup` wizard detects w
 
 These run **your** logged-in CLI session — no extra API key needed.
 
-- **Claude Code**: needs the `claude` CLI logged in + the ACP adapter `@zed-industries/claude-code-acp` (npm; the wizard installs it).
+- **Claude Code**: needs the `claude` CLI logged in + the ACP adapter `@zed-industries/claude-code-acp` (npm; the wizard installs it). On **macOS**, a subscription/keychain login (no `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`) only authenticates when the harness runs against the host's real `~/.claude` — a fresh `CLAUDE_CONFIG_DIR` gets its own empty Keychain entry (`Claude Code-credentials-<hash>`), so yaoe-flow automatically skips the per-run config isolation in that case (see [Per-issue workspace isolation](#per-issue-workspace-isolation)); attribution settings simply don't apply for that run. Set **`ANTHROPIC_API_KEY`** (Config or Harness) if you also want per-run attribution isolation on macOS.
 - **Codex**: needs the `codex` CLI + the `codex-acp` adapter (npm).
 - **Cursor**: needs `cursor-agent` (official installer: `curl -fsS https://cursor.com/install | bash`) — ACP is native. On a headless server / systemd service, set **`CURSOR_API_KEY`** (User API Key from [cursor.com/dashboard/api](https://cursor.com/dashboard/api)) in Config or Harness — browser/keychain login breaks under the per-run HOME mirror. Alternatively use **Harness → Log in to Cursor** (prints a URL; credentials use the file store, not the `cursor-user` keychain).
 - **Copilot**: needs the `copilot` CLI — detection/report supported.
@@ -58,7 +58,7 @@ Hermes is fire-and-report: the dashboard records dispatch/result, but there is n
 Every issue gets `$YAOE_HOME/worktrees/issue-<issueId>` (reused across PMO → Dev → Review → Reopened/Blocked until **Completed**; non-default Linear connections use `conn-<connectionId>/issue-<issueId>`). ACP harnesses still mirror HOME/config beside that cwd each spawn:
 
 - Cursor: `issue-<id>-home` neutralizes your `~/.cursor/mcp.json` (avoids "Too many MCP tools" refusals), `~/.gitconfig` enters as a copy, `gh` config is empty, `~/.git-credentials` stays out (`CURSOR_ISOLATE_MCP_CONFIG`).
-- Claude Code / Codex: `issue-<id>-claude-config` / `issue-<id>-codex-home` with attribution toggles (`*_ATTRIBUTION` settings).
+- Claude Code / Codex: `issue-<id>-claude-config` / `issue-<id>-codex-home` with attribution toggles (`*_ATTRIBUTION` settings). Claude Code skips this isolation on macOS when there is no static credential (`ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` / `CLAUDE_CODE_OAUTH_TOKEN`), to avoid landing on an empty per-path Keychain entry — see the Claude Code note above.
 - Git credentials come from the run token (see [github-setup.md](github-setup.md)). The **code** tree is not deleted between runs; it is removed on Completed (webhook) or by the tick's stale-workspace reconcile. `GOOSE_KEEP_WORKSPACES=true` keeps dirs after Completed for debugging.
 
 ## Detection, budgets and troubleshooting
