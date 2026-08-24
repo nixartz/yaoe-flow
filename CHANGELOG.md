@@ -6,6 +6,8 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-08-24
+
 ### Added
 
 - **Harness provider quota/rate-limit handling**: when a harness's provider account hits its own usage limit (e.g. Claude Code CLI `"You've hit your limit · resets 10:10am (America/Sao_Paulo)"`), the scheduler now recognizes it as a distinct, non-transient condition instead of a generic failure — it stops dispatching that harness on the affected connection until the parsed (or, lacking a parseable clock, a configurable default) reset time, posts a Linear comment with the provider's message and the computed reset ETA, and immediately returns the in-flight issue to its retry state (same destination the inactivity reclaim already uses) instead of leaving it stuck occupying a seat until a 45-minute timeout fires. New `harness_quota_exceeded` notification event and `HARNESS_QUOTA_DEFAULT_COOLDOWN_MS` setting (Reliability & merge, default 30min). OKF: [knowledge/changes/2026-08-24/harness-quota-handling](knowledge/changes/2026-08-24/harness-quota-handling/README.md).
