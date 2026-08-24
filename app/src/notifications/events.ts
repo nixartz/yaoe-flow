@@ -23,6 +23,8 @@ interface EventData {
   limit?: number;
   window?: string;
   action?: string;
+  /** Epoch ms de quando o harness volta a ficar disponível (harness_quota_exceeded). */
+  resetAt?: number;
   /** Connection do evento — sem isso o link abre no workspace default (errado em multi-org). */
   linearCtx?: LinearContext;
   connectionId?: string;
@@ -81,6 +83,14 @@ async function buildPayload(event: NotificationEvent, data: EventData): Promise<
         body: "O agente pode ter morrido/travado — issue devolvida à fila.",
         links,
       };
+    case "harness_quota_exceeded": {
+      const resetLabel = data.resetAt ? new Date(data.resetAt).toLocaleString("pt-BR") : "horário desconhecido";
+      return {
+        title: `⏳ Quota do provedor esgotada (${data.harnessId ?? "?"})`,
+        body: `${data.error ?? "limite atingido"}\n\nDispatches deste harness ficam em espera até ${resetLabel}. A issue foi devolvida à fila automaticamente.`,
+        links,
+      };
+    }
   }
 }
 

@@ -14,7 +14,8 @@ export type NotificationEvent =
   | "run_failed"
   | "circuit_breaker"
   | "budget_exceeded"
-  | "reclaim_timeout";
+  | "reclaim_timeout"
+  | "harness_quota_exceeded";
 
 export const NOTIFICATION_EVENTS: NotificationEvent[] = [
   "issue_blocked",
@@ -23,6 +24,7 @@ export const NOTIFICATION_EVENTS: NotificationEvent[] = [
   "circuit_breaker",
   "budget_exceeded",
   "reclaim_timeout",
+  "harness_quota_exceeded",
 ];
 
 export type ChannelRow = typeof notificationChannels.$inferSelect;

@@ -4,7 +4,7 @@
 // snapshot/usage/refs externas. O scheduler continua vendo só as funções
 // re-exportadas por agent/index.ts (AgentBackend) — invariante §3.2 preservada.
 import { config } from "../config";
-import { log, agentLog, errFields } from "../logger";
+import { log, agentLog, errFields, errorMessage } from "../logger";
 import * as store from "../dashboard/store";
 import * as locks from "../locks";
 import {
@@ -18,6 +18,7 @@ import { ROLE_METAS, toAgentRole, type SchedulerRole } from "./recipe/defaults";
 import { resolvedConfigSnapshot } from "./recipe/builder";
 import { harnessAdapter } from "./harness/registry";
 import { isHarnessPaused } from "./harness/budget";
+import { detectHarnessQuotaError, reactToHarnessQuotaError, activeHarnessQuotaCooldownForRole } from "./harness/quota";
 import type { HarnessId, HarnessRunInput } from "./harness/types";
 import { extractFootprint } from "./backend";
 import { withGitCommitterIdentity, withGitHttpsInsteadOf } from "./harness/gitRunEnv";
@@ -171,6 +172,8 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
   const adapter = harnessAdapter(resolution.harnessId);
   if (!adapter) throw new Error(`harness desconhecido: ${resolution.harnessId}`);
 
+  const connectionId = opts.linearCtx?.connectionId ?? DEFAULT_CONNECTION_ID;
+
   if (isHarnessPaused(resolution.harnessId)) {
     // Budget estourado + ação pausar (§7.4): NÃO despacha, NÃO move a issue —
     // o caller (scheduler) trata a promise rejeitada como "seat continua
@@ -180,9 +183,19 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
     );
   }
 
+  // Defesa em profundidade do gate em scheduler.ts (checado ANTES de
+  // moveState pros papéis dev/pmo/reviewer/orchestrator): cobre chamadores
+  // sem esse pré-check (ex.: dispatch manual) e a corrida entre o tick ler o
+  // cooldown e outro processo setá-lo entretanto.
+  const quotaCooldownUntil = await activeHarnessQuotaCooldownForRole(connectionId, opts.role);
+  if (quotaCooldownUntil) {
+    throw new HarnessNotReadyError(
+      `harness "${resolution.harnessId}" em cooldown de quota do provider até ${new Date(quotaCooldownUntil).toISOString()} — dispatch em espera`
+    );
+  }
+
   const roleMeta = ROLE_METAS[toAgentRole(opts.role)];
   const provider = adapter.capabilities.integration === "acp" ? String(resolution.settings.provider ?? "openrouter") : undefined;
-  const connectionId = opts.linearCtx?.connectionId ?? DEFAULT_CONNECTION_ID;
 
   // Cross-process guard, on top of (not instead of) the footprint lock: at
   // most one in-flight dispatch per (connection, issue, role) even across
@@ -299,23 +312,44 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
     store.finishRun(runId, { status: result.finalStatus ?? "completed", stopReason: result.stopReason });
     return result.outputText;
   } catch (e) {
+    const message = errorMessage(e);
+    // §7.4 tem budget (gasto observado); isto é o PROVIDER recusando a call
+    // porque a conta/assinatura bateu o teto dele (ex.: Claude Code "You've
+    // hit your limit"). Retry imediato é sempre inútil até o reset — ver
+    // agent/harness/quota.ts.
+    const quota = detectHarnessQuotaError(message);
     runLog.error(
-      { operation: opts.operation, durationMs: Date.now() - start, issueId: opts.issueId, ...errFields(e) },
+      {
+        operation: opts.operation,
+        durationMs: Date.now() - start,
+        issueId: opts.issueId,
+        quota: quota ? { resetAtMs: quota.resetAtMs, resetIsEstimate: quota.resetIsEstimate } : undefined,
+        ...errFields(e),
+      },
       "harness run failed"
     );
-    store.finishRun(runId, { status: "failed", error: e instanceof Error ? e.message : String(e) });
+    store.finishRun(runId, { status: "failed", error: message, stopReason: quota ? "provider_quota" : undefined });
     // dispatch (não planning): planning failures são tratados pelo caller
     // (estimateFootprintViaAgent cai no fallback ["*"], sem barulho de sobra).
     if (opts.kind === "dispatch") {
-      notify("run_failed", {
+      notify(quota ? "harness_quota_exceeded" : "run_failed", {
         runId,
         role: opts.role,
         harnessId: resolution.harnessId,
         issueId: opts.issueId,
-        error: e instanceof Error ? e.message : String(e),
+        error: message,
+        resetAt: quota?.resetAtMs,
         linearCtx: opts.linearCtx,
         connectionId: opts.linearCtx?.connectionId,
       });
+      // Best-effort: nunca deixar um erro AQUI mascarar o `throw e` original
+      // abaixo — a issue tem, na pior hipótese, o reclaim por timeout como
+      // rede de segurança (até IN_PROGRESS_TIMEOUT_MS/etc.).
+      if (quota && opts.issueId && opts.linearCtx) {
+        await reactToHarnessQuotaError(opts.linearCtx, opts.issueId, resolution.harnessId, quota).catch((reErr) =>
+          runLog.error({ issueId: opts.issueId, ...errFields(reErr) }, "quota reclaim failed (issue relies on the inactivity reclaim as a fallback)")
+        );
+      }
     }
     throw e;
   } finally {

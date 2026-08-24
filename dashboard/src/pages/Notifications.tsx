@@ -20,6 +20,7 @@ const EVENT_LABEL: Record<NotificationEventType, string> = {
   circuit_breaker: "Circuit breaker",
   budget_exceeded: "Budget estourado",
   reclaim_timeout: "Timeout / reclaim de seat",
+  harness_quota_exceeded: "Quota do provider esgotada",
 };
 
 function CreateChannelForm({ onDone }: { onDone: () => void }) {

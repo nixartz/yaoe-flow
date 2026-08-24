@@ -537,7 +537,14 @@ export const harnessApi = {
 };
 
 // ── Notificações (Fase 3 — §8.1) ──
-export type NotificationEventType = "issue_blocked" | "issue_pending_merge" | "run_failed" | "circuit_breaker" | "budget_exceeded" | "reclaim_timeout";
+export type NotificationEventType =
+  | "issue_blocked"
+  | "issue_pending_merge"
+  | "run_failed"
+  | "circuit_breaker"
+  | "budget_exceeded"
+  | "reclaim_timeout"
+  | "harness_quota_exceeded";
 export interface NotificationChannel {
   id: string;
   type: "webhook" | "slack" | "telegram";

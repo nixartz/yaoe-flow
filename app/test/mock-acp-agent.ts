@@ -216,9 +216,14 @@ function makeAgent(conn: AgentSideConnection): Agent {
         });
         // Update SEM title, como manda a spec do ACP (só campos que mudaram) e
         // como o cursor-agent faz de verdade — o título tem que ser herdado.
+        // `rawOutput` string/array (não objeto) — como claude-code-acp manda de
+        // verdade pra Bash/Read/etc. Regressão: a spec ACP não tipa `rawOutput`
+        // (aceita qualquer JSON); um SDK com schema estrito rejeitaria isso com
+        // "Invalid params" ANTES de chegar no client.ts (ver `bun patch` do ACP SDK).
+        const rawOutput = i % 2 === 0 ? `mock tool ${i} output\nline 2` : [{ type: "text", text: `tool ${i}` }];
         await conn.sessionUpdate({
           sessionId,
-          update: { sessionUpdate: "tool_call_update", toolCallId: `tool-${i}`, status: "completed" },
+          update: { sessionUpdate: "tool_call_update", toolCallId: `tool-${i}`, status: "completed", rawOutput },
         });
       }
       const suffix = SCENARIO === "resumable" && params.prompt[0]?.type === "text" ? "" : "";

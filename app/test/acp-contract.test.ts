@@ -70,6 +70,22 @@ describe("ACP contract (mock agent)", () => {
     rmSync(cwd, { recursive: true, force: true });
   });
 
+  test("tool_call_update com rawOutput string/array (não objeto) não é descartado pelo SDK ACP", async () => {
+    // Regressão: o ACP SDK (@zed-industries/agent-client-protocol) valida cada
+    // `session/update` recebido contra um schema zod ANTES de chamar nosso
+    // handler. Uma versão com `rawOutput: z.record(z.unknown())` rejeita string/
+    // array com "Invalid params" (-32602) e o evento nunca chega aqui — silencioso
+    // na timeline da dashboard. Cobre o `bun patch` em patches/@zed-industries%2F….
+    const { resultPromise, events, cwd } = run("success", { extraEnv: { MOCK_ACP_TOOL_CALLS: "2" } });
+    const { process } = await resultPromise;
+    process.kill();
+    const updates = events.filter((e) => e.kind === "tool_call_update");
+    expect(updates).toHaveLength(2);
+    expect((updates[0]!.payload as { rawOutput?: unknown }).rawOutput).toBe("mock tool 0 output\nline 2");
+    expect((updates[1]!.payload as { rawOutput?: unknown }).rawOutput).toEqual([{ type: "text", text: "tool 1" }]);
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
   test("erro de provider: retry na mesma sessão e sucede", async () => {
     const { resultPromise, cwd } = run("provider_error", { promptRetries: 1 });
     const { result, process } = await resultPromise;

@@ -55,6 +55,8 @@ import { collidesWithActive } from "./dag";
 import { filesOutsideFootprint } from "./scope";
 import { notify } from "./notifications/events";
 import { budgetBanners, isActiveHarnessPausedForRole } from "./agent/harness/budget";
+import { activeHarnessQuotaCooldownForRole } from "./agent/harness/quota";
+import type { SchedulerRole } from "./agent/recipe/defaults";
 import { refreshReadinessSnapshot } from "./readiness";
 import {
   listIssueWorkspaceIssueIds,
@@ -91,6 +93,23 @@ function lockHoldingStates(): Set<string> {
 function svcHeader(phase: string): string {
   const now = new Date().toISOString().slice(0, 16).replace("T", " ");
   return `🤖 **Orchestrator** · \`yaoe-flow\` · ${now} UTC · ${phase}`;
+}
+
+/**
+ * Gate de quota do provider (agent/harness/quota.ts) — mesmo padrão do
+ * budget pausar: checar ANTES de moveState/acquireLock, nunca depois (a
+ * issue já teria sido movida). Um erro de quota anterior já devolveu a issue
+ * pra fila e comentou o motivo (dispatch.ts); isto só evita bater na MESMA
+ * parede de novo pra cada candidato do tick até o reset.
+ */
+async function quotaCoolingDown(ctx: LinearContext, role: SchedulerRole, label: string): Promise<boolean> {
+  const resetAtMs = await activeHarnessQuotaCooldownForRole(ctx.connectionId, role);
+  if (!resetAtMs) return false;
+  log.scheduler.debug(
+    { connectionId: ctx.connectionId, role, resetAt: new Date(resetAtMs).toISOString() },
+    `${label} skipped: harness ativo em cooldown de quota do provider`
+  );
+  return true;
 }
 
 const AGENT_LABEL = {
@@ -482,6 +501,7 @@ async function fillRefiners(ctx: LinearContext, onlyIssueId?: string): Promise<b
     log.scheduler.debug("fillRefiners skipped: harness ativo do PMO com budget pausar");
     return false;
   }
+  if (await quotaCoolingDown(ctx, "pmo", "fillRefiners")) return false;
 
   let dispatched = false;
   for (const issue of ready) {
@@ -583,6 +603,7 @@ async function tryDispatchImpl(ctx: LinearContext, issueId: string, stateName: s
     log.scheduler.debug({ issueId, connectionId: ctx.connectionId }, "dev dispatch skipped: harness ativo com budget pausar");
     return "skipped";
   }
+  if (await quotaCoolingDown(ctx, "dev", "dev dispatch")) return "skipped";
 
   // Hard exclusivity: never start a second Dev (or Orchestrator estimate) while
   // one is already in flight for this issue — covers webhook/tick races that
@@ -713,6 +734,7 @@ async function estimateThenDispatch(ctx: LinearContext, issueId: string, expecte
       log.scheduler.debug({ issueId, connectionId: ctx.connectionId }, "estimate done: harness Dev pausado — abort");
       return;
     }
+    if (await quotaCoolingDown(ctx, "dev", "estimate done")) return;
 
     if (store.findOpenRun(issueId, "dev") || agent.hasActiveDispatchForIssue(issueId)) {
       log.scheduler.info(
@@ -844,6 +866,7 @@ async function fillReviewers(ctx: LinearContext, onlyIssueId?: string): Promise<
     log.scheduler.debug("fillReviewers skipped: harness ativo do reviewer com budget pausar");
     return false;
   }
+  if (await quotaCoolingDown(ctx, "reviewer", "fillReviewers")) return false;
 
   let dispatched = false;
   for (const issue of candidates) {
@@ -979,6 +1002,7 @@ async function drainMerge(ctx: LinearContext, onlyIssueId?: string): Promise<boo
     log.scheduler.debug("drainMerge skipped: harness ativo do orchestrator com budget pausar");
     return false;
   }
+  if (await quotaCoolingDown(ctx, "orchestrator", "drainMerge")) return false;
 
   const issue = pending[0];
   log.scheduler.info({ issueId: issue.id, identifier: issue.identifier, queueSize: pending.length, autoMerge: config.autoMergeIssues, connectionId: ctx.connectionId }, "dispatching merge");

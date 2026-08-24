@@ -44,6 +44,8 @@ function keys(connectionId: string) {
     estimatingPrefix: `${p}estimating:`,
     /** Per-issue/role dispatch lease (SET NX + TTL) — cross-process double-dispatch guard. */
     dispatchingPrefix: `${p}dispatching:`,
+    /** Provider quota cooldown per harness (field = harnessId, value = resetAtMs). */
+    quota: `${p}quota`,
   };
 }
 
@@ -265,6 +267,29 @@ export async function getAttempts(connectionId: string, issueId: string): Promis
 export async function clearAttempts(connectionId: string, issueId: string): Promise<void> {
   const removed = await redis.hdel(keys(connectionId).attempts, issueId);
   if (removed) log.valkey.info({ connectionId, issueId }, "retry attempts cleared");
+}
+
+/**
+ * O PROVIDER por trás de um harness recusou a call por quota/limite da conta
+ * (ex.: Claude Code "You've hit your limit" — ver agent/harness/quota.ts).
+ * Diferente do budget interno (§7.4): aqui não tem "ação avisar/pausar"
+ * configurável — retry antes do reset é sempre inútil, então todo dispatch
+ * NOVO desse harness nesta connection fica em espera até `resetAtMs`.
+ */
+export async function setHarnessQuotaCooldown(connectionId: string, harnessId: string, resetAtMs: number): Promise<void> {
+  await redis.hset(keys(connectionId).quota, harnessId, String(resetAtMs));
+  log.valkey.warn({ connectionId, harnessId, resetAtMs }, "harness quota cooldown set");
+}
+
+/** `null` = nunca setado. Pode vir no passado (já expirou) — caller compara com `Date.now()`. */
+export async function getHarnessQuotaCooldown(connectionId: string, harnessId: string): Promise<number | null> {
+  const v = await redis.hget(keys(connectionId).quota, harnessId);
+  return v ? Number(v) : null;
+}
+
+export async function clearHarnessQuotaCooldown(connectionId: string, harnessId: string): Promise<void> {
+  const removed = await redis.hdel(keys(connectionId).quota, harnessId);
+  if (removed) log.valkey.info({ connectionId, harnessId }, "harness quota cooldown cleared");
 }
 
 export async function markStarted(connectionId: string, issueId: string): Promise<void> {

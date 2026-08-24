@@ -252,6 +252,9 @@ export const config = {
     get mergeTimeoutMs() {
       return svc.num("MERGE_TIMEOUT_MS");
     },
+    get quotaDefaultCooldownMs() {
+      return svc.num("HARNESS_QUOTA_DEFAULT_COOLDOWN_MS");
+    },
   },
 
   get autoMergeIssues() {

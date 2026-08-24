@@ -6,6 +6,15 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+### Added
+
+- **Harness provider quota/rate-limit handling**: when a harness's provider account hits its own usage limit (e.g. Claude Code CLI `"You've hit your limit · resets 10:10am (America/Sao_Paulo)"`), the scheduler now recognizes it as a distinct, non-transient condition instead of a generic failure — it stops dispatching that harness on the affected connection until the parsed (or, lacking a parseable clock, a configurable default) reset time, posts a Linear comment with the provider's message and the computed reset ETA, and immediately returns the in-flight issue to its retry state (same destination the inactivity reclaim already uses) instead of leaving it stuck occupying a seat until a 45-minute timeout fires. New `harness_quota_exceeded` notification event and `HARNESS_QUOTA_DEFAULT_COOLDOWN_MS` setting (Reliability & merge, default 30min). OKF: [knowledge/changes/2026-08-24/harness-quota-handling](knowledge/changes/2026-08-24/harness-quota-handling/README.md).
+
+### Fixed
+
+- **Harness errors from the ACP SDK displayed as `"[object Object]"` in the run's error message and in notifications**: the SDK rejects a prompt with a plain `{code, message}` object, not an `Error` instance, so `e instanceof Error ? e.message : String(e)` silently discarded the real message everywhere it was turned into a string for display (only the structured Pino log line — which serializes objects directly — showed the actual text). A new `errorMessage()` helper handles both shapes; used in `agent/dispatch.ts`'s failure path and the ACP client's retry classifier. Same OKF bundle as the quota handling above.
+- **ACP SDK (`@zed-industries/agent-client-protocol@0.4.5`) dropped `tool_call_update`/`session/update` notifications with `Invalid params` (-32602) when `rawOutput`/`rawInput` was a string or array**: the SDK's generated zod schema typed these fields as `z.record(z.unknown())` ("must be an object"), even though the ACP spec allows any JSON value and `claude-code-acp` legitimately sends a plain string or array for tools like `Bash`/`Read`. The event was rejected before ever reaching yaoe-flow's handler — no tool-call row, no timeline entry, no error anywhere. Patched via `bun patch` to `z.unknown().optional()`. OKF: [knowledge/changes/2026-08-24/acp-sdk-rawoutput-schema-patch](knowledge/changes/2026-08-24/acp-sdk-rawoutput-schema-patch/README.md).
+
 ## [0.1.9] - 2026-08-24
 
 ### Fixed

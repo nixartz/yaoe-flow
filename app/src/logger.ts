@@ -54,6 +54,26 @@ export function errFields(e: unknown): { err: unknown } | { errMessage: string }
   return { errMessage: String(e) };
 }
 
+/**
+ * Mensagem legível de um erro qualquer — pro mesmo problema do comentário
+ * acima (JSON-RPC do ACP rejeita com um objeto plano `{code, message}`, não
+ * um `Error`), mas para os lugares que precisam de uma STRING (DB
+ * `error_message`, corpo de notificação, texto de comentário no Linear), não
+ * de campos estruturados de log. Sem isto, `e instanceof Error ? e.message :
+ * String(e)` virava `"[object Object]"` pra qualquer erro de harness ACP.
+ */
+export function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "object" && e !== null) {
+    const msg = (e as { message?: unknown }).message;
+    if (typeof msg === "string" && msg) {
+      const code = (e as { code?: unknown }).code;
+      return typeof code === "number" ? `${msg} (code ${code})` : msg;
+    }
+  }
+  return String(e);
+}
+
 /** Nível de log efetivo (LOG_LEVEL ou default "info") — útil pra log de boot. */
 export const logLevel = base.level;
 

@@ -1,0 +1,74 @@
+diff --git a/dist/schema.js b/dist/schema.js
+index 080f2be6946b29a5c4dfb3c2ed7e3f21fa0f74de..b57532afce0cd6c1d9c51b3c8cb0808d0177bede 100644
+--- a/dist/schema.js
++++ b/dist/schema.js
+@@ -494,8 +494,8 @@ export const toolCallUpdateSchema = z.object({
+     content: z.array(toolCallContentSchema).optional().nullable(),
+     kind: toolKindSchema.optional().nullable(),
+     locations: z.array(toolCallLocationSchema).optional().nullable(),
+-    rawInput: z.record(z.unknown()).optional(),
+-    rawOutput: z.record(z.unknown()).optional(),
++    rawInput: z.unknown().optional(),
++    rawOutput: z.unknown().optional(),
+     status: toolCallStatusSchema.optional().nullable(),
+     title: z.string().optional().nullable(),
+     toolCallId: z.string(),
+@@ -587,8 +587,8 @@ export const sessionNotificationSchema = z.object({
+             ])
+                 .optional(),
+             locations: z.array(toolCallLocationSchema).optional(),
+-            rawInput: z.record(z.unknown()).optional(),
+-            rawOutput: z.record(z.unknown()).optional(),
++            rawInput: z.unknown().optional(),
++            rawOutput: z.unknown().optional(),
+             sessionUpdate: z.literal("tool_call"),
+             status: z
+                 .union([
+@@ -606,8 +606,8 @@ export const sessionNotificationSchema = z.object({
+             content: z.array(toolCallContentSchema).optional().nullable(),
+             kind: toolKindSchema.optional().nullable(),
+             locations: z.array(toolCallLocationSchema).optional().nullable(),
+-            rawInput: z.record(z.unknown()).optional(),
+-            rawOutput: z.record(z.unknown()).optional(),
++            rawInput: z.unknown().optional(),
++            rawOutput: z.unknown().optional(),
+             sessionUpdate: z.literal("tool_call_update"),
+             status: toolCallStatusSchema.optional().nullable(),
+             title: z.string().optional().nullable(),
+diff --git a/typescript/schema.ts b/typescript/schema.ts
+index 4bd3b6dc9dfb4bcd08d728ba610be5578b29f8d7..176db14ab9582ea8614703ff22ff056c77cb4e72 100644
+--- a/typescript/schema.ts
++++ b/typescript/schema.ts
+@@ -2249,8 +2249,8 @@ export const toolCallUpdateSchema = z.object({
+   content: z.array(toolCallContentSchema).optional().nullable(),
+   kind: toolKindSchema.optional().nullable(),
+   locations: z.array(toolCallLocationSchema).optional().nullable(),
+-  rawInput: z.record(z.unknown()).optional(),
+-  rawOutput: z.record(z.unknown()).optional(),
++  rawInput: z.unknown().optional(),
++  rawOutput: z.unknown().optional(),
+   status: toolCallStatusSchema.optional().nullable(),
+   title: z.string().optional().nullable(),
+   toolCallId: z.string(),
+@@ -2350,8 +2350,8 @@ export const sessionNotificationSchema = z.object({
+         ])
+         .optional(),
+       locations: z.array(toolCallLocationSchema).optional(),
+-      rawInput: z.record(z.unknown()).optional(),
+-      rawOutput: z.record(z.unknown()).optional(),
++      rawInput: z.unknown().optional(),
++      rawOutput: z.unknown().optional(),
+       sessionUpdate: z.literal("tool_call"),
+       status: z
+         .union([
+@@ -2369,8 +2369,8 @@ export const sessionNotificationSchema = z.object({
+       content: z.array(toolCallContentSchema).optional().nullable(),
+       kind: toolKindSchema.optional().nullable(),
+       locations: z.array(toolCallLocationSchema).optional().nullable(),
+-      rawInput: z.record(z.unknown()).optional(),
+-      rawOutput: z.record(z.unknown()).optional(),
++      rawInput: z.unknown().optional(),
++      rawOutput: z.unknown().optional(),
+       sessionUpdate: z.literal("tool_call_update"),
+       status: toolCallStatusSchema.optional().nullable(),
+       title: z.string().optional().nullable(),

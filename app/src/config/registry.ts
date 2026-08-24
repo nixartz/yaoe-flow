@@ -408,6 +408,16 @@ const reliabilityGroup: SettingMeta[] = [
     description: "Inactivity timeout of the review seat (same semantics as REFINING_TIMEOUT_MS).",
   },
   {
+    key: "HARNESS_QUOTA_DEFAULT_COOLDOWN_MS",
+    group: "Reliability & merge",
+    type: "duration_ms",
+    default: 30 * 60_000,
+    scope: "config",
+    validate: positiveInt("HARNESS_QUOTA_DEFAULT_COOLDOWN_MS"),
+    description:
+      "Fallback cooldown when the harness/provider reports a quota/usage-limit error (e.g. \"You've hit your limit\") without a parseable reset time. New dispatches on that harness (this connection) wait this long; the issue currently in flight is returned to the queue immediately instead of waiting for the inactivity timeout.",
+  },
+  {
     key: "MERGE_TIMEOUT_MS",
     group: "Reliability & merge",
     type: "duration_ms",

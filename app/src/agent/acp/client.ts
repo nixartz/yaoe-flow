@@ -17,10 +17,11 @@ import {
   type ModelInfo,
   type SessionModelState,
 } from "@zed-industries/agent-client-protocol";
-import { log, errFields } from "../../logger";
+import { log, errFields, errorMessage } from "../../logger";
 import type { McpServerConfig } from "../recipe/defaults";
 import type { HarnessUsage, NormalizedEvent } from "../harness/types";
 import { cleanupAfterRun } from "../workspace";
+import { detectHarnessQuotaError } from "../harness/quota";
 
 export interface AcpSpawnSpec {
   bin: string;
@@ -1017,8 +1018,16 @@ export async function runAcpTurn(opts: AcpRunOptions): Promise<{ result: AcpRunR
           "prompt"
         );
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (attempt < maxRetries && !msg.startsWith("acp timeout") && TRANSIENT_REJECT.test(msg)) {
+        // `e` costuma ser o objeto plano `{code, message}` do JSON-RPC (a
+        // rejeição do SDK ACP não é um `Error` — ver logger.errorMessage),
+        // não uma instância de Error: `e instanceof Error ? e.message :
+        // String(e)` virava "[object Object]" aqui, e nem TRANSIENT_REJECT
+        // nem a checagem de quota abaixo NUNCA batiam nesse caso.
+        const msg = errorMessage(e);
+        // Quota/limite da CONTA (ex.: Claude Code "You've hit your limit") não
+        // é transiente — retry imediato dá o mesmo erro até o reset. Não gasta
+        // o orçamento de promptRetries; dispatch.ts trata o cooldown/requeue.
+        if (attempt < maxRetries && !msg.startsWith("acp timeout") && !detectHarnessQuotaError(msg) && TRANSIENT_REJECT.test(msg)) {
           attempt++;
           logger.warn({ attempt, maxRetries, error: msg.slice(0, 300) }, "acp prompt: transient error, retrying in the same session");
           await Bun.sleep(2_000 * attempt);
