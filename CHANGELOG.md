@@ -6,6 +6,8 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-08-26
+
 ### Fixed
 
 - **Occupied Linear seats pinned after ACP/harness failure**: Cursor `Connection stalled` (and any other non-quota harness error) marked the SQLite run `failed` and released the Valkey dispatch lease, but left the issue **In Progress / In Review** until `IN_PROGRESS_TIMEOUT_MS` (default 45min). `fillWorkers` counts Linear occupied states, so seats looked full with no live agent. Dispatch catch now reopens immediately (same destinations as the inactivity reclaim); Cursor `[resource_exhausted]` is classified as provider quota (cooldown + reopen). A tick-level abandoned-seat scan (60s grace, skip if open run / live process / dispatch lease) recovers issues already stuck, including `buildRunEnv` throws that previously sat outside the `try/finally`. Linear `issue.assign` for OAuth **AppUser** viewers is skipped (and remaining assign GraphQL errors are `warn` + best-effort). Dashboard Stop does not fight this path (already-`cancelled` runs skip reopen). **`IGNORE_FOOTPRINT_LOCKS` still acquires the per-issue exclusive lock** — that flag only skips *collision* with other issues, not the duplicate-dispatch guard; locks on Reopened/In Progress issues are expected. OKF: [knowledge/changes/2026-08-26/dispatch-failure-reclaim](knowledge/changes/2026-08-26/dispatch-failure-reclaim/README.md).
