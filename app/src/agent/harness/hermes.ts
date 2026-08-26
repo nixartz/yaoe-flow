@@ -1,7 +1,10 @@
-// Adapter Hermes (§7.2) — HTTP, intocado ("igual já é hoje"): fire-and-report
-// via /v1/runs (dispatch) e /v1/chat/completions (planning síncrono). Sem
-// trace/kill/resume — degradação conhecida e aceita (D4); não se gasta
-// esforço melhorando o Hermes nesta iniciativa.
+// Adapter Hermes (§7.2) — HTTP, untouched ("as it already is"): fire-and-report
+// via /v1/runs (dispatch) and /v1/chat/completions (synchronous planning). No
+// trace/kill/resume — known accepted degradation (D4); do not spend effort
+// improving Hermes in this initiative.
+// Pipeline-policy overlay does NOT reach this adapter (`promptText` only).
+// Redo: either a compact `pipelinePolicy:` line on promptText in dispatch.ts,
+// or leave Hermes without overlays — knowledge/product/pipeline-policy-overlay.md.
 import { config } from "../../config";
 import { toAgentRole } from "../recipe/defaults";
 import { log } from "../../logger";

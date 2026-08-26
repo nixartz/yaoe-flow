@@ -267,6 +267,9 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
     runId,
     role: opts.role,
     kind: opts.kind,
+    // SOUL only today. Goose adds protocol+overlay in the recipe builder;
+    // ACP/native add overlay (not protocol) on the first turn. Collapse into
+    // assembleAgentInstructions here — knowledge/product/pipeline-policy-overlay.md.
     systemPrompt: resolution.soulMarkdown,
     roleMeta: { title: roleMeta.title, description: roleMeta.description, prompt: roleMeta.prompt },
     promptText: opts.promptText,

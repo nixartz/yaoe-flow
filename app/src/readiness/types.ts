@@ -109,6 +109,8 @@ export interface ReadinessSnapshot {
     autoDispatchIssues: boolean;
     autoMergeIssues: boolean;
     orchestratorEnabled: boolean;
+    ignoreFootprintLocks: boolean;
+    ignoreBlockingIssues: boolean;
   };
   issues: ReadinessIssue[];
 }

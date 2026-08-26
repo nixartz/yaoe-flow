@@ -265,6 +265,17 @@ export const config = {
     return svc.bool("AUTO_DISPATCH_ISSUES");
   },
 
+  // Opt-in bypasses of the two independent Planned → In Progress gates.
+  // Default false = collision-freedom + Linear blockedBy still apply.
+  // Hot: next tick/dispatch already reads the new value (no requiresRestart).
+  get ignoreFootprintLocks() {
+    return svc.bool("IGNORE_FOOTPRINT_LOCKS");
+  },
+
+  get ignoreBlockingIssues() {
+    return svc.bool("IGNORE_BLOCKING_ISSUES");
+  },
+
   // Labels (MUDANÇA 4). Regra de ouro: status = fonte da verdade; label nunca
   // decide sozinha.
   labels: {

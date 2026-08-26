@@ -13,11 +13,15 @@ import {
 afterEach(() => {
   delete process.env.MAX_DEV_WORKERS;
   delete process.env.MAX_WORKERS;
+  delete process.env.IGNORE_FOOTPRINT_LOCKS;
+  delete process.env.IGNORE_BLOCKING_ISSUES;
   invalidateSettingsCache();
   try {
     resetSetting("MAX_DEV_WORKERS", null);
     resetSetting("TICK_INTERVAL_MS", null);
     resetSetting("LINEAR_API_KEY", null);
+    resetSetting("IGNORE_FOOTPRINT_LOCKS", null);
+    resetSetting("IGNORE_BLOCKING_ISSUES", null);
   } catch {
     /* sem linha no banco — ok */
   }
@@ -29,6 +33,18 @@ describe("config service (ENV > banco > default)", () => {
     expect(r.source).toBe("default");
     expect(r.raw).toBe("1");
     expect(config.capacity.maxDevWorkers).toBe(1);
+  });
+
+  test("IGNORE_FOOTPRINT_LOCKS / IGNORE_BLOCKING_ISSUES default false and are hot", () => {
+    expect(config.ignoreFootprintLocks).toBe(false);
+    expect(config.ignoreBlockingIssues).toBe(false);
+    setSetting("IGNORE_FOOTPRINT_LOCKS", "true", null);
+    setSetting("IGNORE_BLOCKING_ISSUES", "true", null);
+    expect(config.ignoreFootprintLocks).toBe(true);
+    expect(config.ignoreBlockingIssues).toBe(true);
+    resetSetting("IGNORE_FOOTPRINT_LOCKS", null);
+    expect(config.ignoreFootprintLocks).toBe(false);
+    expect(config.ignoreBlockingIssues).toBe(true);
   });
 
   test("valor no banco vence o default e vale IMEDIATAMENTE no getter (hot)", () => {

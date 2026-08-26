@@ -12,10 +12,17 @@
 // nativo, referência Multica" (§7.2). Rodar o smoke test real (§9.2) antes de
 // ativar em produção é obrigatório; ajustar os matchers de `parseLine` é o
 // primeiro lugar a olhar se o smoke falhar.
+//
+// First-turn text is SOUL + overlay (when IGNORE_* flags are on) + role brief
+// + user message. Protocol is NOT concatenated here (pre-existing split vs
+// Goose builder; see knowledge/product/pipeline-policy-overlay.md — redo as
+// one assembler).
 import { mkdirSync } from "node:fs";
 import { resolveHarnessBin, withHarnessSpawnEnv } from "../../cli/setup/harnessDeps";
 import { agentLog, errFields } from "../../logger";
 import { cleanupAfterRun } from "../workspace";
+import { appendPipelinePolicy } from "../recipe/pipeline-policy";
+import { toAgentRole } from "../recipe/defaults";
 import type { HarnessAdapter, HarnessCapabilities, HarnessDetection, HarnessId, HarnessRun, HarnessRunInput } from "./types";
 
 export interface NativeStreamJsonSpec {
@@ -43,7 +50,7 @@ export interface NativeStreamJsonSpec {
 
 export function createNativeStreamJsonAdapter(spec: NativeStreamJsonSpec): HarnessAdapter {
   function createRun(input: HarnessRunInput): HarnessRun {
-    const promptText = `${input.systemPrompt.trimEnd()}\n\n---\n\n${input.roleMeta.prompt}\n\n---\n\n${input.promptText}`;
+    const promptText = `${appendPipelinePolicy(input.systemPrompt, toAgentRole(input.role)).trimEnd()}\n\n---\n\n${input.roleMeta.prompt}\n\n---\n\n${input.promptText}`;
     let killed = false;
     let proc: ReturnType<typeof Bun.spawn> | undefined;
 

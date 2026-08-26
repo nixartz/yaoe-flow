@@ -56,6 +56,15 @@ Behavior lives in **SOULs** (`agents/*.SOUL.md` as seed; database as runtime sou
 
 Each issue declares a **footprint** (`repo:path` globs — the files it is allowed to touch). Valkey holds footprint **locks**; the scheduler only dispatches issues whose footprints do not collide with in-flight runs (`app/src/dag.ts`), and the deterministic **scope-check** (`app/src/scope.ts`) rejects PRs whose diff escapes the declared footprint. Glob semantics (`app/src/dag.ts`): `**` is globstar (zero or more segments), mid-path `*` is one segment, and a trailing `/*` means the whole subtree (same as `/**`) so SOUL `<module>/*` entries stay recursive. `AGENT_AUTHORIZED_ORGS` is an anti-fork fail-safe on top. Merges are further serialized by a merge mutex.
 
+Two **opt-in** hot flags (Config screen / ENV, default `false`, next tick, no restart) can independently relax those gates:
+
+- `IGNORE_FOOTPRINT_LOCKS` — skip footprint-lock collision at Planned → In Progress and skip the files-outside-footprint half of the scope-check at Code Review → In Review. Still estimates the footprint, still acquires the per-issue exclusive lock (duplicate-dispatch guard), still requires a PR and `AGENT_AUTHORIZED_ORGS`. Does **not** skip Linear `blockedBy`/`blocks`.
+- `IGNORE_BLOCKING_ISSUES` — skip Linear `blockedBy`/`blocks` when picking Planned/Reopened. Does **not** skip footprint collision or the scope-check, and does **not** pull issues in the Linear **Blocked** status (human gate).
+
+The two flags combine: both on = both gates off. Default off = collision-freedom stays the product.
+
+When a flag is on, a **per-run prompt overlay** (`app/src/agent/recipe/pipeline-policy.ts`) tells the agent about that exception so the Reviewer does not undo the skipped scope-check, and so Dev expects parallel overlap. The SOUL/protocol text is unchanged (default product). This overlay is a stopgap assembler — see [pipeline-policy-overlay.md](pipeline-policy-overlay.md) before adding a third flag the same way.
+
 ## Harnesses
 
 The scheduler talks to a `HarnessAdapter` interface (`app/src/agent/harness/`). Available harnesses:

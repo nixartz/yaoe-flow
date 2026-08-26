@@ -442,7 +442,25 @@ const reliabilityGroup: SettingMeta[] = [
     default: false,
     scope: "config",
     description:
-      "Automatic dispatch by status on the entry stages (refinement and implementation). Default false: To Do only enters Refining with ready-to-refine; Planned only enters In Progress with ready-to-implement. true = the status is enough (still respects seats, deps, footprint and in-flight issues). Does not affect ready-to-merge (use AUTO_MERGE_ISSUES). Reopened and Code Review already dispatch by status alone.",
+      "Automatic dispatch by status on the entry stages (refinement and implementation). Default false: To Do only enters Refining with ready-to-refine; Planned only enters In Progress with ready-to-implement. true = the status is enough (still respects seats, deps, footprint and in-flight issues unless IGNORE_BLOCKING_ISSUES / IGNORE_FOOTPRINT_LOCKS). Does not affect ready-to-merge (use AUTO_MERGE_ISSUES). Reopened and Code Review already dispatch by status alone.",
+  },
+  {
+    key: "IGNORE_FOOTPRINT_LOCKS",
+    group: "Reliability & merge",
+    type: "boolean",
+    default: false,
+    scope: "config",
+    description:
+      "Skip footprint-lock collision and the deterministic scope-check. Default false (collision-freedom stays on). true = Planned → In Progress proceeds even when the issue's footprint overlaps an in-flight lock, and Code Review → In Review no longer rejects PRs whose diff escapes the declared footprint. Still estimates the footprint (Dev's scope ceiling), still acquires the per-issue exclusive lock (duplicate-dispatch guard), still enforces AGENT_AUTHORIZED_ORGS and the PR-attached check. Does NOT skip Linear blockedBy/blocks — use IGNORE_BLOCKING_ISSUES for that. The two flags are independent and combinable. Hot: the next tick already respects the value.",
+  },
+  {
+    key: "IGNORE_BLOCKING_ISSUES",
+    group: "Reliability & merge",
+    type: "boolean",
+    default: false,
+    scope: "config",
+    description:
+      "Skip Linear blockedBy/blocks when picking Planned/Reopened for implementation. Default false (an issue whose blockers are not Completed stays queued). true = dispatch even if other issues block this one or this one blocks others. Does NOT skip footprint-lock collision or the scope-check — use IGNORE_FOOTPRINT_LOCKS for that. Does NOT pull issues in the Blocked status (that remains a human gate). The two flags are independent and combinable. Hot: the next tick already respects the value.",
   },
 ];
 
@@ -465,7 +483,7 @@ const labelsGroup: SettingMeta[] = [
     scope: "config",
     linearValidatable: "label",
     description:
-      "Human gate between Planned and In Progress. With AUTO_DISPATCH_ISSUES=false (default), a Planned issue without this label stays queued. With AUTO_DISPATCH_ISSUES=true, Planned is enough (still respects deps/footprint/seats).",
+      "Human gate between Planned and In Progress. With AUTO_DISPATCH_ISSUES=false (default), a Planned issue without this label stays queued. With AUTO_DISPATCH_ISSUES=true, Planned is enough (still respects deps/footprint/seats unless IGNORE_BLOCKING_ISSUES / IGNORE_FOOTPRINT_LOCKS).",
   },
   {
     key: "LABEL_READY_TO_MERGE",

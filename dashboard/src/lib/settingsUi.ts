@@ -93,6 +93,8 @@ const LABEL_OVERRIDES: Record<string, string> = {
   MERGE_TIMEOUT_MS: "Timeout de inatividade (merge)",
   AUTO_MERGE_ISSUES: "Merge automático sem label de liberação",
   AUTO_DISPATCH_ISSUES: "Despachar refino/implementação sem label",
+  IGNORE_FOOTPRINT_LOCKS: "Ignorar locks de footprint e scope-check",
+  IGNORE_BLOCKING_ISSUES: "Ignorar dependências blockedBy/blocks",
   LABEL_READY_TO_REFINE: "Label: liberar refino",
   LABEL_READY_TO_IMPLEMENT: "Label: liberar implementação",
   LABEL_READY_TO_MERGE: "Label: liberar merge",

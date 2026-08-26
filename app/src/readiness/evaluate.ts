@@ -4,6 +4,7 @@
 // cache, not Linear.
 import { config } from "../config";
 import { log, errFields } from "../logger";
+import { ignoreBlockingIssues, ignoreFootprintLocks } from "../dispatch-gates";
 import { linearFor } from "../linear";
 import type { LinearContext } from "../db/linearConnections";
 import { getConnection } from "../db/linearConnections";
@@ -251,27 +252,31 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
 
       // Deps / footprint only on the "new implementation" path (no lock) or Planned.
       // Reopened with a lock uses the fix path — deps were already satisfied earlier.
+      // IGNORE_BLOCKING_ISSUES / IGNORE_FOOTPRINT_LOCKS skip their respective
+      // gates so the snapshot matches what the next tick will actually do.
       if (!hasLock || tier === "planned") {
-        try {
-          const deps = await unresolvedDeps(lin, issue.id);
-          if (deps.length > 0) {
-            reasons.push(
-              reason(
-                "deps_unsatisfied",
-                `Unresolved Linear dependencies: ${deps.map((d) => `${d.identifier} (${d.stateName})`).join(", ")}.`,
-                { deps }
-              )
-            );
+        if (!ignoreBlockingIssues()) {
+          try {
+            const deps = await unresolvedDeps(lin, issue.id);
+            if (deps.length > 0) {
+              reasons.push(
+                reason(
+                  "deps_unsatisfied",
+                  `Unresolved Linear dependencies: ${deps.map((d) => `${d.identifier} (${d.stateName})`).join(", ")}.`,
+                  { deps }
+                )
+              );
+            }
+          } catch (e) {
+            log.scheduler.debug({ issueId: issue.id, ...errFields(e) }, "readiness: deps check failed");
           }
-        } catch (e) {
-          log.scheduler.debug({ issueId: issue.id, ...errFields(e) }, "readiness: deps check failed");
         }
 
         if (!hasFootprint) {
           reasons.push(
             reason("estimating_footprint", "Footprint not estimated yet — the next tick triggers async planning.")
           );
-        } else if (footprint) {
+        } else if (footprint && !ignoreFootprintLocks()) {
           const collisions = await buildCollisions(
             lin,
             footprint,
@@ -522,6 +527,8 @@ export async function buildReadinessSnapshot(ctx: LinearContext): Promise<Readin
       autoDispatchIssues: config.autoDispatchIssues,
       autoMergeIssues: config.autoMergeIssues,
       orchestratorEnabled: config.orchestratorEnabled,
+      ignoreFootprintLocks: config.ignoreFootprintLocks,
+      ignoreBlockingIssues: config.ignoreBlockingIssues,
     },
     issues,
   };

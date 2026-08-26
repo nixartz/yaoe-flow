@@ -20,6 +20,8 @@
 //   Blocked mantém o lock até um humano resolver
 //   Self-heal: reconcileStaleLocks() no tick libera locks cujo estado Linear
 //   já saiu do conjunto lock-holding (webhook de Completed perdido, etc.)
+//   Opt-out: IGNORE_FOOTPRINT_LOCKS (hot) skips collision + deterministic
+//   scope-check; IGNORE_BLOCKING_ISSUES skips Linear blockedBy. Default off.
 //
 // Ciclo de vida do workspace em disco (issue-<id>):
 //   criado no primeiro dispatch da issue (qualquer harness)
@@ -53,6 +55,12 @@ import * as github from "./github";
 import * as store from "./dashboard/store";
 import { collidesWithActive } from "./dag";
 import { filesOutsideFootprint } from "./scope";
+import {
+  ignoreBlockingIssues,
+  ignoreFootprintLocks,
+  shouldBlockOnFootprintCollision,
+  shouldSkipFootprintScopeCheck,
+} from "./dispatch-gates";
 import { notify } from "./notifications/events";
 import { budgetBanners, isActiveHarnessPausedForRole } from "./agent/harness/budget";
 import { activeHarnessQuotaCooldownForRole } from "./agent/harness/quota";
@@ -672,7 +680,12 @@ async function tryDispatchImpl(ctx: LinearContext, issueId: string, stateName: s
     }
   }
 
-  if (!(await depsSatisfied(ctx, issueId))) {
+  if (ignoreBlockingIssues()) {
+    log.scheduler.debug(
+      { issueId, connectionId: ctx.connectionId },
+      "dev dispatch: Linear blockedBy ignored (IGNORE_BLOCKING_ISSUES=true)"
+    );
+  } else if (!(await depsSatisfied(ctx, issueId))) {
     log.scheduler.debug({ issueId, connectionId: ctx.connectionId }, "dev dispatch skipped: dependencies not satisfied");
     return "skipped";
   }
@@ -753,7 +766,12 @@ async function estimateThenDispatch(ctx: LinearContext, issueId: string, expecte
       return;
     }
 
-    if (!(await depsSatisfied(ctx, issueId))) {
+    if (ignoreBlockingIssues()) {
+      log.scheduler.debug(
+        { issueId, connectionId: ctx.connectionId },
+        "estimate done: Linear blockedBy ignored (IGNORE_BLOCKING_ISSUES=true)"
+      );
+    } else if (!(await depsSatisfied(ctx, issueId))) {
       log.scheduler.debug({ issueId, connectionId: ctx.connectionId }, "estimate done: deps not satisfied — abort");
       return;
     }
@@ -766,9 +784,16 @@ async function estimateThenDispatch(ctx: LinearContext, issueId: string, expecte
     }
 
     const active = (await locks.activeFootprints(ctx.connectionId)).map((a) => a.footprint);
-    if (collidesWithActive(footprint, active)) {
+    const collides = collidesWithActive(footprint, active);
+    if (shouldBlockOnFootprintCollision(collides)) {
       log.scheduler.debug({ issueId, footprint, connectionId: ctx.connectionId }, "estimate done: footprint collision — abort");
       return;
+    }
+    if (collides && ignoreFootprintLocks()) {
+      log.scheduler.info(
+        { issueId, footprint, connectionId: ctx.connectionId },
+        "estimate done: footprint collision ignored (IGNORE_FOOTPRINT_LOCKS=true)"
+      );
     }
 
     await commitNewImplementation(ctx, issue.id, issue.stateName, footprint);
@@ -794,9 +819,16 @@ async function commitNewImplementation(
   }
 
   const active = (await locks.activeFootprints(ctx.connectionId)).map((a) => a.footprint);
-  if (collidesWithActive(footprint, active)) {
+  const collides = collidesWithActive(footprint, active);
+  if (shouldBlockOnFootprintCollision(collides)) {
     log.scheduler.debug({ issueId, footprint, connectionId: ctx.connectionId }, "dev dispatch skipped: footprint collision");
     return false;
+  }
+  if (collides && ignoreFootprintLocks()) {
+    log.scheduler.info(
+      { issueId, footprint, connectionId: ctx.connectionId },
+      "dev dispatch: footprint collision ignored (IGNORE_FOOTPRINT_LOCKS=true)"
+    );
   }
 
   // Exclusive claim — two estimateThenDispatch completions must not both spawn Dev.
@@ -834,6 +866,8 @@ async function commitNewImplementation(
 }
 
 async function depsSatisfied(ctx: LinearContext, issueId: string): Promise<boolean> {
+  // Linear blockedBy only — footprint locks are a separate gate (collidesWithActive).
+  // Callers skip this when IGNORE_BLOCKING_ISSUES is on.
   const lin = linearFor(ctx);
   const issue = await lin.getIssue(issueId);
   for (const depId of issue.blockedBy) {
@@ -928,6 +962,14 @@ async function scopeCheckPasses(ctx: LinearContext, issueId: string): Promise<bo
     );
     await moveState(lin, issueId, S.codeReview, S.blocked, "scope-check: unauthorized repo owner");
     return false;
+  }
+
+  if (shouldSkipFootprintScopeCheck()) {
+    log.scheduler.info(
+      { issueId, pr: `${pr.owner}/${pr.repo}#${pr.number}`, connectionId: ctx.connectionId },
+      "scope-check skipped: IGNORE_FOOTPRINT_LOCKS=true (PR and authorized-orgs checks still ran)"
+    );
+    return true;
   }
 
   const footprint = (await locks.getFootprint(ctx.connectionId, issueId)) ?? [];

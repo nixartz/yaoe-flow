@@ -55,6 +55,11 @@ Three labels act as human gates (safe to auto-create; the wizard offers to):
 
 With `AUTO_DISPATCH_ISSUES=true` the first two gates are skipped (status is enough); with `AUTO_MERGE_ISSUES=true` the merge gate is skipped. Status is always the source of truth — labels only restrict.
 
+Two more opt-in flags (Config → Automação e confiabilidade, default off, hot — no restart):
+
+- `IGNORE_FOOTPRINT_LOCKS` — Planned → In Progress even when the footprint overlaps an in-flight lock; Code Review → In Review no longer rejects PRs that escape the declared footprint. Linear `blockedBy`/`blocks` still apply. The Reviewer SOUL is not rewritten: a per-run prompt overlay tells the agent not to Reopen *solely* for a footprint leak (see [pipeline-policy-overlay.md](../knowledge/product/pipeline-policy-overlay.md)).
+- `IGNORE_BLOCKING_ISSUES` — Planned/Reopened dispatch even if other issues block this one (or this one blocks others). Footprint locks and the scope-check still apply. The Linear **Blocked** status is unchanged (human gate). PMO still writes `blockedBy`/`blocks`; the overlay tells Dev not to `🙋`+Blocked for unmet deps.
+
 ## 4. Webhook (optional but recommended)
 
 Without a webhook the pipeline still works — the scheduler reconciles every `TICK_INTERVAL_MS` (30s default). A webhook adds instant push:

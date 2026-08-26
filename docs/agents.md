@@ -54,7 +54,7 @@ A refined issue contains, in its description/comments:
 
 - **Context & expected result** — what and why, in reviewable form.
 - **`## Footprint`** — `repo:path` globs the implementation may touch. This is simultaneously the collision-lock key and the scope-check ceiling. `**` is globstar; trailing `/*` means the whole subtree.
-- **Dependencies** — Linear blockedBy/blocks relations (the scheduler will not dispatch an issue whose blockers are open).
+- **Dependencies** — Linear blockedBy/blocks relations (the scheduler will not dispatch an issue whose blockers are open, unless `IGNORE_BLOCKING_ISSUES=true`).
 - **Out of scope** — explicit guardrails.
 - **Checklist** — acceptance criteria the Reviewer traces against.
 
@@ -71,4 +71,6 @@ Per-role seat caps: `MAX_PMO_WORKERS`, `MAX_DEV_WORKERS`, `MAX_REVIEWER_WORKERS`
 ## Editing agents on the dashboard
 
 Dashboard → **Agents**: each role is an entity with SOUL versions, the active **harness** (see [harnesses.md](harnesses.md)), model, and its **MCP servers** (see [mcp-configuration.md](mcp-configuration.md)). Changes apply on the next dispatch — no restart.
+
+Operator flags that change **scheduler enforcement** without changing the default SOUL (`IGNORE_FOOTPRINT_LOCKS`, `IGNORE_BLOCKING_ISSUES`) inject a short per-run overlay at prompt assembly. The overlay is omitted when the flags are off. This assembly is a stopgap — see [knowledge/product/pipeline-policy-overlay.md](../knowledge/product/pipeline-policy-overlay.md) before adding another flag the same way.
 

@@ -85,7 +85,12 @@ export interface HarnessRunInput {
   role: SchedulerRole;
   /** planning = precisa do texto de volta (síncrono); dispatch = fire-and-report. */
   kind: "planning" | "dispatch";
-  /** SOUL + protocolo já concatenados (builder §6.3). Como cada harness a injeta é problema do adapter. */
+  /**
+   * Today: the active version's SOUL only (`dispatch.ts` passes `soulMarkdown`).
+   * Goose concatenates protocol + overlay in `buildGooseRecipe`; ACP/native append
+   * the overlay (not the protocol) on the first turn. Target: one assembler fills
+   * this with SOUL + protocol + overlays — see knowledge/product/pipeline-policy-overlay.md.
+   */
   systemPrompt: string;
   /** Metadados do papel (title/description/prompt do recipe goose). */
   roleMeta: { title: string; description: string; prompt: string };

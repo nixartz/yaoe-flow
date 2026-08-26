@@ -43,7 +43,7 @@ For org-wide installs with short-lived installation tokens, configure a GitHub A
 
 ## Process docs and the scope-check
 
-The deterministic scope-check rejects any PR file outside the issue's `## Footprint`, except **ancillary** paths (protocol §8.1): lockfiles, toolchain config, test companions — and the **process docs** your repo's `AGENTS.md`/`CLAUDE.md` requires with every change (change bundle / OKF entry, `CHANGELOG.md`, ADRs).
+The deterministic scope-check rejects any PR file outside the issue's `## Footprint`, except **ancillary** paths (protocol §8.1): lockfiles, toolchain config, test companions — and the **process docs** your repo's `AGENTS.md`/`CLAUDE.md` requires with every change (change bundle / OKF entry, `CHANGELOG.md`, ADRs). With `IGNORE_FOOTPRINT_LOCKS=true` this files-outside-footprint check is skipped (PR-exists and `AGENT_AUTHORIZED_ORGS` still run).
 
 Which doc paths count is set by **`SCOPE_ANCILLARY_DOC_PATHS`** (Config screen or ENV), a comma-separated glob list using the same dialect as the footprint (`**` = globstar, trailing `/*` = whole subtree; each pattern also matches at any depth, for monorepo packages). The default covers the most common layouts (`CHANGELOG.md`, `knowledge/changes/**`, `docs/changes/**`, `.okf/**`, `adr/**`, `.changeset/**`); point it at whatever your repos actually use:
 

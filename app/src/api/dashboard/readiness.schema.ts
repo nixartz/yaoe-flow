@@ -77,6 +77,8 @@ export const readinessSnapshotSchema = z.object({
     autoDispatchIssues: z.boolean(),
     autoMergeIssues: z.boolean(),
     orchestratorEnabled: z.boolean(),
+    ignoreFootprintLocks: z.boolean().optional().default(false),
+    ignoreBlockingIssues: z.boolean().optional().default(false),
   }),
   issues: z.array(issueSchema),
 });

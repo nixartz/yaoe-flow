@@ -614,6 +614,12 @@ export function Readiness() {
                 Auto-dispatch: {snap.flags.autoDispatchIssues ? "ligado" : "off (labels)"}
               </span>
               <span>Auto-merge: {snap.flags.autoMergeIssues ? "ligado" : "off (labels)"}</span>
+              <span>
+                Footprint locks: {snap.flags.ignoreFootprintLocks ? "ignorados" : "respeitados"}
+              </span>
+              <span>
+                Dependências Linear: {snap.flags.ignoreBlockingIssues ? "ignoradas" : "respeitadas"}
+              </span>
             </div>
             <CapacityStrip snap={snap} />
             <div className="flex flex-wrap gap-2 text-xs">

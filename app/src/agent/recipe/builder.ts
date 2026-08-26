@@ -5,11 +5,15 @@
 //
 // Um módulo por target:
 //   • goose  → objeto recipe (mesmo shape do YAML antigo) → deeplink base64
-//   • demais → system prompt (SOUL + protocolo) + config de sessão (adapter)
-import { config } from "../../config";
-import { communicationProtocol, type McpServerConfig, type RoleMeta } from "./defaults";
+//     instructions = SOUL + protocol + overlay (when IGNORE_* flags are on)
+//   • demais → adapters concatenate SOUL + overlay + role brief + user message
+//     (protocol is a pre-existing gap on ACP — knowledge/product/pipeline-policy-overlay.md)
+import { communicationProtocol, type McpServerConfig, type RoleMeta, type AgentRole } from "./defaults";
+import { appendPipelinePolicy } from "./pipeline-policy";
 
 export interface GooseRecipeInput {
+  /** Canonical role — selects overlay bullets (Reviewer vs Dev vs PMO). */
+  role: AgentRole;
   roleMeta: Pick<RoleMeta, "title" | "description" | "prompt">;
   soulMarkdown: string;
   model?: string | null;
@@ -86,7 +90,10 @@ export function buildGooseRecipe(input: GooseRecipeInput): BuiltGooseRecipe {
     });
   }
 
-  const instructions = `${input.soulMarkdown.trimEnd()}\n\n---\n\n${communicationProtocol()}`;
+  const instructions = appendPipelinePolicy(
+    `${input.soulMarkdown.trimEnd()}\n\n---\n\n${communicationProtocol()}`,
+    input.role
+  );
   const raw: Record<string, unknown> = {
     version: "1.0.0",
     title: input.roleMeta.title,
@@ -125,9 +132,17 @@ export function gooseRecipeWithModel(base: BuiltGooseRecipe, model: string): Bui
   };
 }
 
-/** System prompt dos harness não-goose: SOUL + protocolo + brief do papel. */
-export function buildSystemPrompt(soulMarkdown: string, roleMeta: Pick<RoleMeta, "prompt">): string {
-  return `${soulMarkdown.trimEnd()}\n\n---\n\n${communicationProtocol()}\n\n---\n\n${roleMeta.prompt}`;
+/** Non-Goose system prompt: SOUL + protocol + overlay (if any) + role brief. ACP adapters do not call this yet — see knowledge/product/pipeline-policy-overlay.md. */
+export function buildSystemPrompt(
+  soulMarkdown: string,
+  roleMeta: Pick<RoleMeta, "prompt">,
+  role: AgentRole
+): string {
+  const instructions = appendPipelinePolicy(
+    `${soulMarkdown.trimEnd()}\n\n---\n\n${communicationProtocol()}`,
+    role
+  );
+  return `${instructions}\n\n---\n\n${roleMeta.prompt}`;
 }
 
 // Cache por (agentVersionId, harnessId, model, configUpdatedAt) — invalidado

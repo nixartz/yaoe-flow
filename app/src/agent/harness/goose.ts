@@ -20,6 +20,8 @@ import {
 } from "../acp/client";
 import { cleanupAfterRun } from "../workspace";
 import { buildGooseRecipe, gooseRecipeWithModel, cachedGooseRecipe, type BuiltGooseRecipe } from "../recipe/builder";
+import { recipeAssemblyKey } from "../recipe/pipeline-policy";
+import { toAgentRole } from "../recipe/defaults";
 import { withGitHttpsInsteadOf } from "./gitRunEnv";
 import type { HarnessAdapter, HarnessDetection, HarnessRun, HarnessRunInput } from "./types";
 
@@ -154,9 +156,13 @@ async function detect(): Promise<HarnessDetection> {
 
 function createRun(input: HarnessRunInput): HarnessRun {
   const model = (input.model || undefined) ?? (input.settings.model as string | undefined);
-  const cacheKey = `${input.role}:${input.model ?? ""}:${JSON.stringify(input.settings)}:${JSON.stringify(input.mcpServers)}`;
+  // recipeAssemblyKey() must stay in this key: protocol language + IGNORE_*
+  // flags are hot and baked into recipe.instructions. Without it a Config
+  // toggle keeps serving a stale deeplink — knowledge/product/pipeline-policy-overlay.md.
+  const cacheKey = `${input.role}:${input.model ?? ""}:${JSON.stringify(input.settings)}:${JSON.stringify(input.mcpServers)}:${recipeAssemblyKey()}`;
   const baseRecipe = cachedGooseRecipe(cacheKey, () =>
     buildGooseRecipe({
+      role: toAgentRole(input.role),
       roleMeta: input.roleMeta,
       soulMarkdown: input.systemPrompt,
       model,

@@ -1,10 +1,11 @@
 // Fábrica compartilhada pelos adapters ACP "maduros" (§7.2: claude-code via
 // `claude-code-acp`, codex via `codex-acp`, cursor via `cursor-agent acp` —
 // adapters Zed sobre os CLIs oficiais, ou ACP nativo no caso do Cursor).
-// Diferem do goose em como a SOUL entra: sem deeplink de recipe, o system
-// prompt (SOUL + protocolo + brief do papel) vai concatenado à primeira
-// mensagem do turno — mecanismo portável entre adapters ACP que não têm o
-// conceito de "recipe" do goose.
+// Differ from Goose in how the SOUL enters: without a recipe deeplink, the
+// first-turn text is SOUL + overlay (when IGNORE_* flags are on) + role brief
+// + user message. Protocol is NOT concatenated here (pre-existing split vs
+// Goose builder; see knowledge/product/pipeline-policy-overlay.md — redo as
+// one assembler).
 //
 // Os MCPs do agente ativo vão pelo param `mcpServers` do `session/new` (forma
 // padrão do ACP), traduzidos em acp/client.ts.
@@ -15,6 +16,8 @@ import { resolveHarnessBin, withHarnessSpawnEnv } from "../../cli/setup/harnessD
 import { agentLog, errFields } from "../../logger";
 import { runAcpTurn, listAcpModels, type AcpProcess } from "../acp/client";
 import { cleanupAfterRun, isIssueWorkspaceCwd } from "../workspace";
+import { appendPipelinePolicy } from "../recipe/pipeline-policy";
+import { toAgentRole } from "../recipe/defaults";
 import {
   extractCursorLoginUrl,
   isCursorAuthRequiredError,
@@ -82,7 +85,7 @@ export interface AcpAdapterSpec {
 
 export function createAcpAdapter(spec: AcpAdapterSpec): HarnessAdapter {
   function createRun(input: HarnessRunInput): HarnessRun {
-    const promptText = `${input.systemPrompt.trimEnd()}\n\n---\n\n${input.roleMeta.prompt}\n\n---\n\n${input.promptText}`;
+    const promptText = `${appendPipelinePolicy(input.systemPrompt, toAgentRole(input.role)).trimEnd()}\n\n---\n\n${input.roleMeta.prompt}\n\n---\n\n${input.promptText}`;
     const log = agentLog({ harness: spec.id, runId: input.runId, role: input.role });
     let processRef: AcpProcess | null = null;
     let killed = false;
