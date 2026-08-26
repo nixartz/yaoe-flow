@@ -154,13 +154,26 @@ function parseRateLimitFromErrors(
   return null;
 }
 
+/** Strip `bestEffort` so it never lands in Pino fields; pick warn vs error. */
+function gqlLogContext(context: Record<string, unknown>): {
+  bestEffort: boolean;
+  fields: Record<string, unknown>;
+} {
+  const { bestEffort, ...fields } = context;
+  return { bestEffort: Boolean(bestEffort), fields };
+}
+
+function gqlFailureLog(context: Record<string, unknown>) {
+  return gqlLogContext(context).bestEffort ? log.linear.warn : log.linear.error;
+}
+
 function assertNotInCooldown(apiKey: string, operation: string, context: Record<string, unknown>): void {
   const cooldownMs = linearRateLimitCooldownMs(apiKey);
   if (cooldownMs <= 0) return;
   const st = getRateLimitState(apiKey);
   const resetAtMs = st.cooledUntilMs ?? Date.now() + cooldownMs;
   log.linear.warn(
-    { operation, cooldownMs, resetAtMs, ...context },
+    { operation, cooldownMs, resetAtMs, ...gqlLogContext(context).fields },
     "Linear API call skipped: rate limit cooldown active"
   );
   throw new LinearRateLimitError(`Linear rate limit cooldown (${cooldownMs}ms remaining)`, {
@@ -213,8 +226,8 @@ function makeGql(apiKey: string): GqlFn {
           const resetAtMs =
             st.resetAtMs && st.resetAtMs > Date.now() ? st.resetAtMs : Date.now() + rl.durationMs;
           markRateLimited(apiKey, resetAtMs, rl.remaining, rl.limit);
-          log.linear.error(
-            { operation, status: res.status, durationMs, body, ...context },
+          gqlFailureLog(context)(
+            { operation, status: res.status, durationMs, body, ...gqlLogContext(context).fields },
             "Linear API HTTP error"
           );
           throw new LinearRateLimitError(`Linear API rate limited (${rl.remaining}/${rl.limit} remaining)`, {
@@ -223,8 +236,8 @@ function makeGql(apiKey: string): GqlFn {
             limit: rl.limit,
           });
         }
-        log.linear.error(
-          { operation, status: res.status, durationMs, body, ...context },
+        gqlFailureLog(context)(
+          { operation, status: res.status, durationMs, body, ...gqlLogContext(context).fields },
           "Linear API HTTP error"
         );
         throw new Error(`Linear API ${res.status}: ${body}`);
@@ -238,8 +251,8 @@ function makeGql(apiKey: string): GqlFn {
           const resetAtMs =
             st.resetAtMs && st.resetAtMs > Date.now() ? st.resetAtMs : Date.now() + rl.durationMs;
           markRateLimited(apiKey, resetAtMs, rl.remaining, rl.limit);
-          log.linear.error(
-            { operation, durationMs, errors: json.errors, ...context },
+          gqlFailureLog(context)(
+            { operation, durationMs, errors: json.errors, ...gqlLogContext(context).fields },
             "Linear GraphQL error"
           );
           throw new LinearRateLimitError(`Linear API rate limited (${rl.remaining}/${rl.limit} remaining)`, {
@@ -248,22 +261,22 @@ function makeGql(apiKey: string): GqlFn {
             limit: rl.limit,
           });
         }
-        log.linear.error(
-          { operation, durationMs, errors: json.errors, ...context },
+        gqlFailureLog(context)(
+          { operation, durationMs, errors: json.errors, ...gqlLogContext(context).fields },
           "Linear GraphQL error"
         );
         throw new Error(`Linear GraphQL: ${JSON.stringify(json.errors)}`);
       }
 
-      log.linear.debug({ operation, durationMs, ...context }, "Linear API ok");
+      log.linear.debug({ operation, durationMs, ...gqlLogContext(context).fields }, "Linear API ok");
       return json.data as T;
     } catch (e) {
       if (isLinearRateLimitError(e)) throw e;
       if (e instanceof Error && (e.message.startsWith("Linear API") || e.message.startsWith("Linear GraphQL"))) {
         throw e;
       }
-      log.linear.error(
-        { operation, durationMs: Date.now() - start, ...context, ...errFields(e) },
+      gqlFailureLog(context)(
+        { operation, durationMs: Date.now() - start, ...gqlLogContext(context).fields, ...errFields(e) },
         "Linear API request failed"
       );
       throw e;
@@ -589,26 +602,31 @@ export function createLinearClient(scope: LinearScope) {
     log.linear.info({ issueId, stateName, connectionId: scope.connectionId }, "issue state updated");
   }
 
-  let viewerCache: { id: string; name: string; email: string } | null = null;
-  /** Usuário da API key (bot/SIMSBOT) — cacheado por client/connection. */
-  async function getViewer(): Promise<{ id: string; name: string; email: string }> {
+  let viewerCache: { id: string; name: string; email: string; typename: string } | null = null;
+  /** Actor da API key — cacheado por client/connection. App users cannot be assignees. */
+  async function getViewer(): Promise<{ id: string; name: string; email: string; typename: string }> {
     if (viewerCache) return viewerCache;
-    const data = await gql<{ viewer: { id: string; name: string; email: string } }>(
+    const data = await gql<{ viewer: { id: string; name: string; email: string; __typename: string } }>(
       "viewer.get",
-      `query { viewer { id name email } }`
+      `query { viewer { id name email __typename } }`
     );
-    viewerCache = data.viewer;
+    const v = data.viewer;
+    viewerCache = { id: v.id, name: v.name, email: v.email, typename: v.__typename };
     return viewerCache;
   }
 
-  async function assignIssue(issueId: string, assigneeId: string): Promise<void> {
+  async function assignIssue(
+    issueId: string,
+    assigneeId: string,
+    opts?: { bestEffort?: boolean }
+  ): Promise<void> {
     await gql<{ issueUpdate: { success: boolean } }>(
       "issue.assign",
       `mutation($id: String!, $assigneeId: String!) {
         issueUpdate(id: $id, input: { assigneeId: $assigneeId }) { success }
       }`,
       { id: issueId, assigneeId },
-      { issueId, assigneeId }
+      { issueId, assigneeId, ...(opts?.bestEffort ? { bestEffort: true } : {}) }
     );
     log.linear.info({ issueId, assigneeId, connectionId: scope.connectionId }, "issue assigned");
   }

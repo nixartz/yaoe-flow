@@ -73,6 +73,12 @@ import {
   workspaceHoldingStates,
   issueWorkspaceCwd,
 } from "./agent/workspace";
+import {
+  abandonedDispatchComment,
+  reopenOccupiedIssue,
+  roleForOccupiedState,
+  shouldReclaimAbandonedDispatch,
+} from "./occupied-reclaim";
 import type { Footprint } from "./types";
 
 const S = config.states;
@@ -148,7 +154,18 @@ async function moveState(lin: LinearClient, issueId: string, from: string | unde
 async function assignToConnectionViewer(lin: LinearClient, issueId: string, ctx: LinearContext): Promise<void> {
   try {
     const viewer = await lin.getViewer();
-    await lin.assignIssue(issueId, viewer.id);
+    if (viewer.typename && viewer.typename !== "User") {
+      log.scheduler.info(
+        {
+          issueId,
+          connectionId: ctx.connectionId,
+          viewerTypename: viewer.typename,
+        },
+        "skip assign: Linear viewer is not a User (app users cannot be assignees)"
+      );
+      return;
+    }
+    await lin.assignIssue(issueId, viewer.id, { bestEffort: true });
     log.scheduler.info(
       {
         issueId,
@@ -1146,6 +1163,8 @@ async function reclaimStale(ctx: LinearContext): Promise<void> {
     }
     await locks.clearMerging(ctx.connectionId);
   }
+
+  await reclaimAbandonedOccupied(ctx);
 }
 
 async function reclaimPhase(
@@ -1192,6 +1211,45 @@ async function reclaimPhase(
       await locks.clearStarted(ctx.connectionId, issue.id);
     } catch (e) {
       log.scheduler.error({ issueId: issue.id, state, connectionId: ctx.connectionId, ...errFields(e) }, "reclaim phase failed");
+    }
+  }
+}
+
+/**
+ * Occupied Linear status (In Progress / In Review / Refining) with no live
+ * harness, no open run row, and no dispatch lease — after a grace so the
+ * fire()-without-await window is not treated as abandonment. Returns the
+ * seat without waiting for IN_PROGRESS_TIMEOUT_MS (the ACP catch path
+ * already reopens on failure; this is the net for a crash / older binary
+ * that marked the SQLite run failed and released the lease but left Linear).
+ */
+async function reclaimAbandonedOccupied(ctx: LinearContext): Promise<void> {
+  const now = Date.now();
+  for (const state of [S.refining, S.inProgress, S.inReview]) {
+    const role = roleForOccupiedState(state);
+    if (!role) continue;
+    for (const issue of await linearFor(ctx).listIssuesInState(state)) {
+      try {
+        const should = shouldReclaimAbandonedDispatch({
+          hasOpenRun: Boolean(store.findOpenRun(issue.id)),
+          hasActiveProcess: agent.hasActiveDispatchForIssue(issue.id),
+          hasDispatchLock: await locks.hasDispatchLock(ctx.connectionId, issue.id, role),
+          startedAt: await locks.getStarted(ctx.connectionId, issue.id),
+          now,
+        });
+        if (!should) continue;
+        log.scheduler.warn(
+          { issueId: issue.id, phase: state, role, connectionId: ctx.connectionId },
+          "reclaiming abandoned occupied seat"
+        );
+        await reopenOccupiedIssue(ctx, issue.id, abandonedDispatchComment());
+        notify("reclaim_timeout", { issueId: issue.id, phase: state, linearCtx: ctx });
+      } catch (e) {
+        log.scheduler.error(
+          { issueId: issue.id, state, connectionId: ctx.connectionId, ...errFields(e) },
+          "abandoned occupied reclaim failed"
+        );
+      }
     }
   }
 }

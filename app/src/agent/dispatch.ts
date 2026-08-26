@@ -19,6 +19,7 @@ import { resolvedConfigSnapshot } from "./recipe/builder";
 import { harnessAdapter } from "./harness/registry";
 import { isHarnessPaused } from "./harness/budget";
 import { detectHarnessQuotaError, reactToHarnessQuotaError, activeHarnessQuotaCooldownForRole } from "./harness/quota";
+import { dispatchFailureComment, reopenOccupiedIssue } from "../occupied-reclaim";
 import type { HarnessId, HarnessRunInput } from "./harness/types";
 import { extractFootprint } from "./backend";
 import { withGitCommitterIdentity, withGitHttpsInsteadOf } from "./harness/gitRunEnv";
@@ -212,92 +213,94 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
     }
   }
 
-  // ANTES do startRun: no modo GitHub App isto vai à rede e pode falhar
-  // (credencial incompleta, PEM inválida, installation revogada). Falhar aqui
-  // rejeita a promise sem deixar linha de run pendurada em `running` — o
-  // scheduler trata como "seat continua ocupado, tenta no próximo tick",
-  // mesmo caminho do HarnessNotReadyError.
-  const runEnv = await buildRunEnv(opts.linearCtx);
-
-  const runId = store.startRun({
-    backend: resolution.harnessId,
-    operation: opts.operation,
-    role: opts.role,
-    issueId: opts.issueId,
-    mode: opts.mode,
-    provider,
-    model: resolution.model ?? undefined,
-    agentId: resolution.agentId,
-    agentVersionId: resolution.agentVersionId,
-    harnessId: resolution.harnessId,
-    linearConnectionId: opts.linearCtx?.connectionId,
-    resolvedConfigJson: resolvedConfigSnapshot({
-      harnessId: resolution.harnessId,
-      model: resolution.model,
-      provider,
-      settings: resolution.settings,
-      mcpServers: resolution.mcpServers,
-    }),
-  });
-  store.recordEvent(runId, "user_message", { text: opts.promptText, payload: { text: opts.promptText } });
-
-  const cwd = resolveDispatchCwd({
-    issueId: opts.issueId,
-    runId,
-    connectionId,
-  });
-
-  // §7.6: session resume — só em modo fix, só se o harness ativo suporta, só
-  // DA MESMA issue NO MESMO harness (chave composta). Fallback transparente:
-  // se não houver sessão, resumeSessionId fica undefined e o adapter começa
-  // do zero — nunca trava o pipeline por causa disso.
-  let resumeSessionId: string | undefined;
-  if (adapter.capabilities.sessionResume && opts.mode === "fix" && opts.issueId) {
-    resumeSessionId =
-      (await locks.getSession(connectionId, opts.issueId, resolution.harnessId).catch(() => null)) ?? undefined;
-  }
-
-  // Planning (footprint) e merge do Orchestrator precisam ser rápidos pra não
-  // segurar o tick / outras seats — preferFast pede variante `fast=true` ao
-  // harness ACP (Cursor: grok-4.5 / composer-2.5; outros: qualquer fast).
-  const preferFast =
-    opts.role === "orchestrator" && (opts.kind === "planning" || opts.operation === "dispatchMerge");
-
-  const input: HarnessRunInput = {
-    runId,
-    role: opts.role,
-    kind: opts.kind,
-    // SOUL only today. Goose adds protocol+overlay in the recipe builder;
-    // ACP/native add overlay (not protocol) on the first turn. Collapse into
-    // assembleAgentInstructions here — knowledge/product/pipeline-policy-overlay.md.
-    systemPrompt: resolution.soulMarkdown,
-    roleMeta: { title: roleMeta.title, description: roleMeta.description, prompt: roleMeta.prompt },
-    promptText: opts.promptText,
-    cwd,
-    mcpServers: resolution.mcpServers,
-    model: resolution.model ?? undefined,
-    preferFast: preferFast || undefined,
-    settings: resolution.settings,
-    env: runEnv,
-    resumeSessionId,
-    onEvent(evt) {
-      // Sibling cancel / Blocked webhook may have marked this run failed while
-      // the process is still alive — restore "running" so the dashboard matches reality.
-      store.reviveRunIfStillActive(runId);
-      store.recordEvent(runId, evt.kind, { text: evt.text, toolName: evt.toolName, toolStatus: evt.toolStatus, payload: evt.payload });
-    },
-  };
-
-  const run = adapter.createRun(input);
-  activeRuns.set(runId, { kill: () => run.kill(), cwd, issueId: opts.issueId });
+  // Everything after the lease is inside try/finally so a throw in
+  // buildRunEnv / startRun / createRun still releases the Valkey lease
+  // and (for kind=dispatch) returns the Linear seat. Previously the try
+  // started only at `run.result`, so a GitHub App mint failure leaked the
+  // lease until DISPATCH_LOCK_TTL (2h) and left the issue In Progress.
+  let runId: string | undefined;
   const start = Date.now();
-  const runLog = agentLog({ harness: resolution.harnessId, runId, role: opts.role });
-  runLog.info({ cwd, issueId: opts.issueId, connectionId }, "dispatch workspace resolved");
-
   try {
+    const runEnv = await buildRunEnv(opts.linearCtx);
+
+    const startedId = store.startRun({
+      backend: resolution.harnessId,
+      operation: opts.operation,
+      role: opts.role,
+      issueId: opts.issueId,
+      mode: opts.mode,
+      provider,
+      model: resolution.model ?? undefined,
+      agentId: resolution.agentId,
+      agentVersionId: resolution.agentVersionId,
+      harnessId: resolution.harnessId,
+      linearConnectionId: opts.linearCtx?.connectionId,
+      resolvedConfigJson: resolvedConfigSnapshot({
+        harnessId: resolution.harnessId,
+        model: resolution.model,
+        provider,
+        settings: resolution.settings,
+        mcpServers: resolution.mcpServers,
+      }),
+    });
+    runId = startedId;
+    store.recordEvent(startedId, "user_message", { text: opts.promptText, payload: { text: opts.promptText } });
+
+    const cwd = resolveDispatchCwd({
+      issueId: opts.issueId,
+      runId: startedId,
+      connectionId,
+    });
+
+    // §7.6: session resume — só em modo fix, só se o harness ativo suporta, só
+    // DA MESMA issue NO MESMO harness (chave composta). Fallback transparente:
+    // se não houver sessão, resumeSessionId fica undefined e o adapter começa
+    // do zero — nunca trava o pipeline por causa disso.
+    let resumeSessionId: string | undefined;
+    if (adapter.capabilities.sessionResume && opts.mode === "fix" && opts.issueId) {
+      resumeSessionId =
+        (await locks.getSession(connectionId, opts.issueId, resolution.harnessId).catch(() => null)) ?? undefined;
+    }
+
+    // Planning (footprint) e merge do Orchestrator precisam ser rápidos pra não
+    // segurar o tick / outras seats — preferFast pede variante `fast=true` ao
+    // harness ACP (Cursor: grok-4.5 / composer-2.5; outros: qualquer fast).
+    const preferFast =
+      opts.role === "orchestrator" && (opts.kind === "planning" || opts.operation === "dispatchMerge");
+
+    const input: HarnessRunInput = {
+      runId: startedId,
+      role: opts.role,
+      kind: opts.kind,
+      // SOUL only today. Goose adds protocol+overlay in the recipe builder;
+      // ACP/native add overlay (not protocol) on the first turn. Collapse into
+      // assembleAgentInstructions here — knowledge/product/pipeline-policy-overlay.md.
+      systemPrompt: resolution.soulMarkdown,
+      roleMeta: { title: roleMeta.title, description: roleMeta.description, prompt: roleMeta.prompt },
+      promptText: opts.promptText,
+      cwd,
+      mcpServers: resolution.mcpServers,
+      model: resolution.model ?? undefined,
+      preferFast: preferFast || undefined,
+      settings: resolution.settings,
+      env: runEnv,
+      resumeSessionId,
+      onEvent(evt) {
+        // Sibling cancel / Blocked webhook may have marked this run failed while
+        // the process is still alive — restore "running" so the dashboard matches reality.
+        store.reviveRunIfStillActive(startedId);
+        store.recordEvent(startedId, evt.kind, { text: evt.text, toolName: evt.toolName, toolStatus: evt.toolStatus, payload: evt.payload });
+      },
+    };
+
+    const run = adapter.createRun(input);
+    activeRuns.set(startedId, { kill: () => run.kill(), cwd, issueId: opts.issueId });
+    const runLog = agentLog({ harness: resolution.harnessId, runId: startedId, role: opts.role });
+    runLog.info({ cwd, issueId: opts.issueId, connectionId }, "dispatch workspace resolved");
+
     const result = await run.result;
     const costSource = adapter.capabilities.costSource === "api" ? "api" : "subscription";
-    store.recordHarnessResult(runId, {
+    store.recordHarnessResult(startedId, {
       costSource,
       externalSessionId: result.sessionId,
       externalRefsJson: result.externalRefs ? JSON.stringify(result.externalRefs) : undefined,
@@ -312,15 +315,17 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
       { operation: opts.operation, durationMs: Date.now() - start, issueId: opts.issueId, stopReason: result.stopReason },
       "harness run completed"
     );
-    store.finishRun(runId, { status: result.finalStatus ?? "completed", stopReason: result.stopReason });
+    store.finishRun(startedId, { status: result.finalStatus ?? "completed", stopReason: result.stopReason });
     return result.outputText;
   } catch (e) {
+    if (e instanceof HarnessNotReadyError) throw e;
     const message = errorMessage(e);
     // §7.4 tem budget (gasto observado); isto é o PROVIDER recusando a call
     // porque a conta/assinatura bateu o teto dele (ex.: Claude Code "You've
     // hit your limit"). Retry imediato é sempre inútil até o reset — ver
     // agent/harness/quota.ts.
     const quota = detectHarnessQuotaError(message);
+    const runLog = agentLog({ harness: resolution.harnessId, runId, role: opts.role });
     runLog.error(
       {
         operation: opts.operation,
@@ -331,32 +336,57 @@ export async function runDispatch(opts: DispatchOptions): Promise<string> {
       },
       "harness run failed"
     );
-    store.finishRun(runId, { status: "failed", error: message, stopReason: quota ? "provider_quota" : undefined });
+    // Dashboard stop writes `cancelled` then kills the process; that kill
+    // rejects `run.result` and lands here. First terminal status wins in
+    // finishRun — do not notify-as-failed or reopen Linear (manualStopRun is
+    // moving the issue to Blocked).
+    const priorStatus =
+      runId != null ? ((store.getRun(runId)?.run as { status?: string } | undefined)?.status ?? undefined) : undefined;
+    const cancelledByDashboard = priorStatus === "cancelled";
+    if (runId) {
+      store.finishRun(runId, { status: "failed", error: message, stopReason: quota ? "provider_quota" : undefined });
+    }
     // dispatch (não planning): planning failures são tratados pelo caller
-    // (estimateFootprintViaAgent cai no fallback ["*"], sem barulho de sobra).
+    // (estimateFootprintViaAgent cai no fallback ["*"], sem texto de sobra).
     if (opts.kind === "dispatch") {
-      notify(quota ? "harness_quota_exceeded" : "run_failed", {
-        runId,
-        role: opts.role,
-        harnessId: resolution.harnessId,
-        issueId: opts.issueId,
-        error: message,
-        resetAt: quota?.resetAtMs,
-        linearCtx: opts.linearCtx,
-        connectionId: opts.linearCtx?.connectionId,
-      });
-      // Best-effort: nunca deixar um erro AQUI mascarar o `throw e` original
-      // abaixo — a issue tem, na pior hipótese, o reclaim por timeout como
-      // rede de segurança (até IN_PROGRESS_TIMEOUT_MS/etc.).
-      if (quota && opts.issueId && opts.linearCtx) {
-        await reactToHarnessQuotaError(opts.linearCtx, opts.issueId, resolution.harnessId, quota).catch((reErr) =>
-          runLog.error({ issueId: opts.issueId, ...errFields(reErr) }, "quota reclaim failed (issue relies on the inactivity reclaim as a fallback)")
-        );
+      if (runId && !cancelledByDashboard) {
+        notify(quota ? "harness_quota_exceeded" : "run_failed", {
+          runId,
+          role: opts.role,
+          harnessId: resolution.harnessId,
+          issueId: opts.issueId,
+          error: message,
+          resetAt: quota?.resetAtMs,
+          linearCtx: opts.linearCtx,
+          connectionId: opts.linearCtx?.connectionId,
+        });
+      }
+      // Best-effort: never let a reclaim error mask the original throw.
+      // Without this, Linear stays In Progress/In Review until the inactivity
+      // timeout (default 45min) even though the SQLite run is already failed
+      // and the Valkey dispatch lease is released in `finally` — seats pinned
+      // with no live agent. Only reclaim when THIS attempt owned the lease
+      // (a twin `HarnessNotReadyError` "already in progress" must not steal
+      // the issue from the process that still holds it).
+      if (!cancelledByDashboard && opts.issueId && opts.linearCtx && dispatchLockToken) {
+        if (quota) {
+          await reactToHarnessQuotaError(opts.linearCtx, opts.issueId, resolution.harnessId, quota).catch((reErr) =>
+            runLog.error({ issueId: opts.issueId, ...errFields(reErr) }, "quota reclaim failed (issue relies on the inactivity reclaim as a fallback)")
+          );
+        } else {
+          await reopenOccupiedIssue(
+            opts.linearCtx,
+            opts.issueId,
+            dispatchFailureComment(resolution.harnessId, message)
+          ).catch((reErr) =>
+            runLog.error({ issueId: opts.issueId, ...errFields(reErr) }, "dispatch-failure reclaim failed (issue relies on the inactivity reclaim as a fallback)")
+          );
+        }
       }
     }
     throw e;
   } finally {
-    activeRuns.delete(runId);
+    if (runId) activeRuns.delete(runId);
     if (opts.issueId && dispatchLockToken) {
       await locks.releaseDispatchLock(connectionId, opts.issueId, opts.role, dispatchLockToken).catch(() => {});
     }

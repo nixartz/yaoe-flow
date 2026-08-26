@@ -93,6 +93,19 @@ describe("detectHarnessQuotaError", () => {
     expect(detectHarnessQuotaError("monthly limit reached")).not.toBeNull();
     expect(detectHarnessQuotaError("Error: quota exceeded for this model")).not.toBeNull();
   });
+
+  test("Cursor ACP [resource_exhausted] is quota (cooldown + immediate reopen), not a generic stall", () => {
+    const now = Date.now();
+    const info = detectHarnessQuotaError("erro de provider persistiu: [resource_exhausted] Error", now);
+    expect(info).not.toBeNull();
+    expect(info!.resetIsEstimate).toBe(true);
+    expect(info!.resetAtMs).toBe(now + config.reliability.quotaDefaultCooldownMs);
+    expect(detectHarnessQuotaError("resource exhausted")).not.toBeNull();
+  });
+
+  test("Connection stalled is NOT quota — generic dispatch-failure reopen, no harness cooldown", () => {
+    expect(detectHarnessQuotaError("erro de provider persistiu: Connection stalled")).toBeNull();
+  });
 });
 
 describe("quotaReopenTarget (mesmo destino do reclaim por timeout, disparado na hora)", () => {

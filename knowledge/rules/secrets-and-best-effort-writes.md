@@ -12,5 +12,5 @@
 
 **Self-healing rule**
 
-Any resource a dispatch acquires (lock, seat, run row) needs a release path in `reclaimStale()` (scheduler) or equivalent — otherwise a hung agent pins that resource forever.
+Any resource a dispatch acquires (lock, seat, run row) needs a release path in `reclaimStale()` (scheduler) or equivalent — otherwise a hung agent pins that resource forever. **Linear occupied statuses are seats**: a harness failure that closes the SQLite run and the Valkey dispatch lease must also return the issue to its retry state (`app/src/occupied-reclaim.ts`). Waiting only on `IN_PROGRESS_TIMEOUT_MS` leaves `fillWorkers` counting a full queue with no live agent.
 

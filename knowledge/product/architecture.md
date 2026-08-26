@@ -78,6 +78,7 @@ Per-issue workspace: every harness (ACP, Goose, Hermes-adjacent local cwd users)
 ## Self-healing
 
 - Inactivity timeouts per seat (`REFINING_TIMEOUT_MS`/`IN_PROGRESS_TIMEOUT_MS`/`IN_REVIEW_TIMEOUT_MS`/`MERGE_TIMEOUT_MS`) reclaim stuck seats — with trace, "activity" means run events, not wall time.
+- **Harness failure reopens the Linear seat immediately** (not only on the inactivity timer): quota errors (`You've hit your limit`, Cursor `[resource_exhausted]`) set a per-harness cooldown; generic ACP failures (`Connection stalled`, crash after `startRun`) comment + move to the same retry states the timeout reclaim uses. A tick-level abandoned-seat scan (60s grace; skip if an open run, live process, or dispatch lease exists) recovers issues left occupied by an older binary or a `buildRunEnv` throw.
 - `MAX_ATTEMPTS` circuit breaker sends looping issues to Blocked.
 - `reclaimStale()` releases every acquired resource (locks, seats, run rows); a retention sweep prunes runs/webhooks/logs.
 - The reconciliation tick survives missed webhooks — including **stale footprint locks**: if an issue reaches Completed (or otherwise leaves lock-holding states) without the release webhook landing, `reconcileStaleLocks()` drops the Valkey lock on the next tick so Planned candidates are not blocked forever. The same tick runs **`reconcileStaleWorkspaces()`** to delete on-disk `issue-*` dirs whose Linear state left the workspace-holding set (Refining/Planned/In Progress/…/Blocked).

@@ -94,6 +94,11 @@ export async function tryAcquireDispatchLock(
   return null;
 }
 
+export async function hasDispatchLock(connectionId: string, issueId: string, role: string): Promise<boolean> {
+  const key = `${keys(connectionId).dispatchingPrefix}${role}:${issueId}`;
+  return (await redis.exists(key)) === 1;
+}
+
 /** No-op if `token` no longer owns the lease (already expired + re-claimed). */
 export async function releaseDispatchLock(
   connectionId: string,

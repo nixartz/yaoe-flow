@@ -11,10 +11,10 @@ import { config } from "../../config";
 import { log } from "../../logger";
 import { activeAgentForRole } from "../../db/agents";
 import * as locks from "../../locks";
-import { linearFor } from "../../linear";
 import type { LinearContext } from "../../db/linearConnections";
 import type { SchedulerRole } from "../recipe/defaults";
 import type { HarnessId } from "./types";
+import { occupiedReopenTarget, reopenOccupiedIssue } from "../../occupied-reclaim";
 
 export interface HarnessQuotaInfo {
   /** Mensagem original do provider (pro comentário no Linear / notificação). */
@@ -26,7 +26,7 @@ export interface HarnessQuotaInfo {
 }
 
 // Frases observadas de "provider recusou por quota/limite da conta" — cobre
-// Claude Code (assinatura), e frases genéricas usadas por outros providers
+// Claude Code (assinatura), Cursor `[resource_exhausted]`, e frases genéricas
 // (OpenAI-style `insufficient_quota`, limites diário/semanal/mensal). NÃO
 // cobre `rate.?limit`/429/503 (já tratados como TRANSIENT_REJECT em
 // acp/client.ts — esses geralmente voltam em segundos, não até um reset fixo).
@@ -36,6 +36,8 @@ const QUOTA_PATTERNS: RegExp[] = [
   /quota exceeded/i,
   /insufficient_quota/i,
   /(?:monthly|weekly|daily) limit reached/i,
+  /\[resource_exhausted\]/i,
+  /resource.?exhausted/i,
 ];
 
 // Ex.: "resets 10:10am (America/Sao_Paulo)" ou "resets at 3:45 PM (UTC)".
@@ -135,22 +137,11 @@ export function detectHarnessQuotaError(message: string, now = Date.now()): Harn
 }
 
 /**
- * Mapa de reopen em caso de quota — mesmo destino que reclaimStale() usa por
- * timeout de inatividade (scheduler.ts), só que disparado NA HORA em vez de
- * esperar até IN_PROGRESS_TIMEOUT_MS/etc. Mantém o footprint lock (Reopened e
- * Code Review são estados lock-holding — scheduler.ts `lockHoldingStates()`),
- * então o retrabalho retoma no MESMO branch, sem re-estimar.
- * `null` = estado sem reopen conhecido (ex.: a issue já saiu da fase antes do
- * erro chegar) — o caller só comenta/notifica, sem mover.
+ * Same destinations as reclaimStale() inactivity timeouts — reused for
+ * quota and generic harness-failure reopen. Kept as `quotaReopenTarget`
+ * so existing tests/callers keep compiling.
  */
-export function quotaReopenTarget(stateName: string): string | null {
-  const S = config.states;
-  if (stateName === S.refining) return S.todo;
-  if (stateName === S.inProgress) return S.reopened;
-  if (stateName === S.inReview) return S.codeReview;
-  if (stateName === S.pendingMerge) return S.reopened;
-  return null;
-}
+export const quotaReopenTarget = occupiedReopenTarget;
 
 /**
  * Gate do scheduler (mesmo padrão de `isActiveHarnessPausedForRole`,
@@ -175,11 +166,6 @@ export function formatQuotaReset(resetAtMs: number): string {
   return new Date(resetAtMs).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-function svcHeader(phase: string): string {
-  const now = new Date().toISOString().slice(0, 16).replace("T", " ");
-  return `🤖 **Orchestrator** · \`yaoe-flow\` · ${now} UTC · ${phase}`;
-}
-
 /**
  * Reação a um erro de quota já detectado e classificado (dispatch.ts's
  * catch, chamado com best-effort — falha aqui NUNCA deve mascarar o erro
@@ -199,30 +185,18 @@ export async function reactToHarnessQuotaError(
   await locks.setHarnessQuotaCooldown(ctx.connectionId, harnessId, info.resetAtMs);
   logQuotaCooldownSet(harnessId, ctx.connectionId, info);
 
-  const lin = linearFor(ctx);
-  const issue = await lin.getIssue(issueId);
-  const target = quotaReopenTarget(issue.stateName);
   const resetLabel = formatQuotaReset(info.resetAtMs);
   const etaNote = info.resetIsEstimate
-    ? `Sem horário de reset informado pelo provider — nova tentativa liberada em ~${resetLabel} (estimativa; ver \`HARNESS_QUOTA_DEFAULT_COOLDOWN_MS\`).`
-    : `Nova tentativa liberada a partir de ${resetLabel}.`;
+    ? `No reset clock from the provider — next attempt after ~${resetLabel} (estimate; see \`HARNESS_QUOTA_DEFAULT_COOLDOWN_MS\`).`
+    : `Next attempt from ${resetLabel}.`;
 
-  await lin.comment(
+  await reopenOccupiedIssue(
+    ctx,
     issueId,
-    `${svcHeader("Reliability")}\n\n⏳ O harness "${harnessId}" atingiu o limite de uso do provider:\n\n> ${info.message}\n\n${etaNote}` +
-      (target
-        ? `\n\nDevolvendo para **${target}** — o scheduler retoma sozinho após o cooldown, sem intervenção humana.`
-        : `\n\n(A issue já não está mais em uma fase que o scheduler devolve automaticamente — nenhuma mudança de status foi feita.)`)
+    `🤖 **Orchestrator** · \`yaoe-flow\` · ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC · Reliability\n\n` +
+      `⏳ The harness "${harnessId}" hit the provider usage limit:\n\n> ${info.message}\n\n${etaNote}\n\n` +
+      `Returning the issue to the retry queue so the seat is not held until the inactivity timeout. The scheduler resumes after the cooldown.`
   );
-
-  if (!target) return;
-
-  log.agent.info({ issueId, from: issue.stateName, to: target, connectionId: ctx.connectionId, harnessId }, "moving issue state (quota reclaim)");
-  await lin.setState(issueId, target);
-  if (issue.stateName === config.states.pendingMerge) {
-    await locks.clearMergingIf(ctx.connectionId, issueId);
-  }
-  await locks.clearStarted(ctx.connectionId, issueId);
 }
 
 function logQuotaCooldownSet(harnessId: string, connectionId: string, info: HarnessQuotaInfo): void {
