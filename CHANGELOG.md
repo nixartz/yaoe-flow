@@ -6,6 +6,8 @@ Each entry mirrors an OKF change bundle under `knowledge/changes/<yyyy-MM-dd>/<c
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-08-26
+
 ### Added
 
 - **`IGNORE_FOOTPRINT_LOCKS` / `IGNORE_BLOCKING_ISSUES`** (Config → Reliability & merge, default `false`, hot — no restart): two independent opt-in bypasses of the Planned → In Progress gates. Footprint-lock collision and the deterministic files-outside-footprint scope-check stay on unless `IGNORE_FOOTPRINT_LOCKS` is set; Linear `blockedBy`/`blocks` stay on unless `IGNORE_BLOCKING_ISSUES` is set. They combine, they do not pull issues in the Linear Blocked status, and they still acquire the per-issue exclusive lock / require a PR / honor `AGENT_AUTHORIZED_ORGS`. Readiness snapshot and Config screen surface both. When a flag is on, a per-run **prompt overlay** (not a SOUL rewrite) tells the agent so Reviewer/Dev do not undo the scheduler bypass — stopgap assembly documented for a later single assembler. OKF: [knowledge/changes/2026-08-26/ignore-footprint-and-blocking-gates](knowledge/changes/2026-08-26/ignore-footprint-and-blocking-gates/README.md).
